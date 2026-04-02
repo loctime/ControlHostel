@@ -1,0 +1,24 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Por ahora, el usuario siempre trabaja sobre el hostel fijo "demo".
+    match /hostels/{hostelId} {
+      function isDemoHostel() {
+        return hostelId == "demo";
+      }
+
+      // Documento del hostel
+      allow read, write: if isSignedIn() && isDemoHostel();
+
+      // Subcolecciones del hostel (cualquier profundidad)
+      match /{document=**} {
+        allow read, write: if isSignedIn() && isDemoHostel();
+      }
+    }
+  }
+}

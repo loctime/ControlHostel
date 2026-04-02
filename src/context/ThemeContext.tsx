@@ -26,22 +26,15 @@ function applyHtmlClass(mode: ThemeMode) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>("dark");
-
-  useEffect(() => {
+  const [mode, setModeState] = useState<ThemeMode>(() => {
     try {
       const stored = window.localStorage.getItem("theme");
-      if (stored === "light" || stored === "dark") {
-        setModeState(stored);
-        applyHtmlClass(stored);
-      } else {
-        applyHtmlClass("dark");
-      }
+      if (stored === "light" || stored === "dark") return stored;
+      return "dark";
     } catch {
-      // Si localStorage no está disponible, nos quedamos con el default dark.
-      applyHtmlClass("dark");
+      return "dark";
     }
-  }, []);
+  });
 
   useEffect(() => {
     applyHtmlClass(mode);
