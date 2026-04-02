@@ -65,6 +65,7 @@ export type Reserva = {
 
 /** hostels/{hostelId}/bloqueos/{bloqueoId} */
 export type Bloqueo = {
+  plantaId?: string;
   espacioId: string;
   camaId: string;
   desde: Timestamp;

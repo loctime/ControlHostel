@@ -1,0 +1,1197 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  addDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  Timestamp,
+  updateDoc,
+} from "firebase/firestore";
+import type { Cama, Espacio, Planta, Reserva, ReservaEstado } from "@/lib/db";
+import {
+  camasCollection,
+  espaciosCollection,
+  plantasCollection,
+  reservaRef,
+  reservasCollection,
+} from "@/lib/db";
+
+type Id = string;
+type PlantaNode = { id: Id; data: Planta };
+type EspacioNode = { id: Id; data: Espacio };
+type CamaNode = { id: Id; data: Cama & { activo?: boolean } };
+type ReservaNode = { id: Id; data: Reserva };
+
+type CamaKey = `${Id}/${Id}/${Id}`; // plantaId/espacioId/camaId
+type EspacioKey = `${Id}/${Id}`; // plantaId/espacioId
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function errorMessage(e: unknown, fallback: string) {
+  if (e instanceof Error) return e.message || fallback;
+  if (typeof e === "string") return e || fallback;
+  return fallback;
+}
+
+function toYmd(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseYmd(value: string): Date | null {
+  if (!value) return null;
+  const d = new Date(`${value}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function nightsBetween(checkin: Date, checkout: Date) {
+  const a = new Date(checkin);
+  const b = new Date(checkout);
+  a.setHours(0, 0, 0, 0);
+  b.setHours(0, 0, 0, 0);
+  const diff = b.getTime() - a.getTime();
+  return Math.max(0, Math.round(diff / (1000 * 60 * 60 * 24)));
+}
+
+function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
+  return aStart < bEnd && aEnd > bStart;
+}
+
+const ESTADOS: Array<{ id: ReservaEstado | "todas"; label: string }> = [
+  { id: "todas", label: "Todas" },
+  { id: "en_curso", label: "En curso" },
+  { id: "confirmada", label: "Confirmadas" },
+  { id: "pendiente", label: "Pendientes" },
+  { id: "completada", label: "Completadas" },
+  { id: "cancelada", label: "Canceladas" },
+];
+
+const ESTADO_LABEL: Record<ReservaEstado, string> = {
+  en_curso: "En curso",
+  confirmada: "Confirmada",
+  pendiente: "Pendiente",
+  completada: "Completada",
+  cancelada: "Cancelada",
+};
+
+function badgeColors(estado: ReservaEstado): { bg: string; fg: string } {
+  // Requisito: fondos oscuros + textos claros por estado
+  switch (estado) {
+    case "en_curso":
+      return { bg: "rgba(30, 58, 138, 0.45)", fg: "rgb(147, 197, 253)" };
+    case "confirmada":
+      return { bg: "rgba(20, 83, 45, 0.5)", fg: "rgb(134, 239, 172)" };
+    case "pendiente":
+      return { bg: "rgba(133, 77, 14, 0.55)", fg: "rgb(253, 230, 138)" };
+    case "completada":
+      return { bg: "rgba(75, 85, 99, 0.55)", fg: "rgb(229, 231, 235)" };
+    case "cancelada":
+      return { bg: "rgba(127, 29, 29, 0.55)", fg: "rgb(254, 202, 202)" };
+  }
+}
+
+function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={cx(
+        "w-full rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none",
+        "focus:border-[var(--border-primary)]",
+        props.className,
+      )}
+    />
+  );
+}
+
+function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={cx(
+        "w-full rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none",
+        "focus:border-[var(--border-primary)]",
+        props.className,
+      )}
+    />
+  );
+}
+
+function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={cx(
+        "inline-flex items-center justify-center rounded-xl bg-[var(--bg-accent)] px-4 py-2.5 text-sm font-medium text-[var(--text-button)] shadow-sm transition hover:opacity-90",
+        "disabled:opacity-50",
+        props.className,
+      )}
+    />
+  );
+}
+
+function SecondaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={cx(
+        "inline-flex items-center justify-center rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-button)] px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] shadow-sm transition hover:bg-[var(--bg-list)]",
+        "disabled:opacity-50",
+        props.className,
+      )}
+    />
+  );
+}
+
+function DangerButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={cx(
+        "inline-flex items-center justify-center rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] shadow-sm transition hover:bg-[var(--bg-list)]",
+        "disabled:opacity-50",
+        props.className,
+      )}
+      style={{ borderColor: "rgba(255, 99, 99, 0.45)" }}
+    />
+  );
+}
+
+function Modal({
+  open,
+  title,
+  children,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/40"
+        onClick={onClose}
+        aria-label="Cerrar modal"
+      />
+      <div
+        className="
+          relative w-full max-w-2xl rounded-2xl border border-[var(--border-secondary)]
+          bg-[var(--bg-component)] shadow-xl
+        "
+      >
+        <div className="flex items-center justify-between border-b border-[var(--border-secondary)] px-5 py-4">
+          <div className="text-base font-semibold text-[var(--text-primary)]">{title}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg px-2 py-1 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-list)]"
+          >
+            Esc
+          </button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export default function ReservasPage() {
+  const hostelId = "demo";
+
+  const [plantas, setPlantas] = useState<PlantaNode[]>([]);
+  const [espaciosByPlanta, setEspaciosByPlanta] = useState<Record<Id, EspacioNode[]>>({});
+  const [camasByEspacio, setCamasByEspacio] = useState<Record<EspacioKey, CamaNode[]>>({});
+
+  const [reservas, setReservas] = useState<ReservaNode[]>([]);
+
+  const [queryText, setQueryText] = useState("");
+  const [filterEspacioKey, setFilterEspacioKey] = useState<EspacioKey | "">("");
+  const [filterDate, setFilterDate] = useState("");
+  const [filterEstado, setFilterEstado] = useState<ReservaEstado | "todas">("todas");
+
+  const [selectedReservaId, setSelectedReservaId] = useState<Id | null>(null);
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const unsubEspaciosByPlanta = useRef(new Map<Id, () => void>());
+  const unsubCamasByEspacio = useRef(new Map<EspacioKey, () => void>());
+
+  useEffect(() => {
+    const espaciosMap = unsubEspaciosByPlanta.current;
+    const camasMap = unsubCamasByEspacio.current;
+
+    const qPlantas = query(plantasCollection(hostelId), orderBy("orden", "asc"));
+    const unsubPlantas = onSnapshot(
+      qPlantas,
+      (snap) => {
+        setError(null);
+        const next = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+        setPlantas(next);
+
+        const plantaIds = new Set(next.map((p) => p.id));
+        for (const [plantaId, unsub] of espaciosMap.entries()) {
+          if (!plantaIds.has(plantaId)) {
+            unsub();
+            espaciosMap.delete(plantaId);
+            setEspaciosByPlanta((prev) => {
+              const copy = { ...prev };
+              delete copy[plantaId];
+              return copy;
+            });
+          }
+        }
+
+        for (const plantaId of plantaIds) {
+          if (espaciosMap.has(plantaId)) continue;
+
+          const qEspacios = query(
+            espaciosCollection(hostelId, plantaId),
+            orderBy("nombre", "asc"),
+          );
+          const unsubEspacios = onSnapshot(
+            qEspacios,
+            (snapEspacios) => {
+              setError(null);
+              const nextEspacios = snapEspacios.docs.map((d) => ({ id: d.id, data: d.data() }));
+              setEspaciosByPlanta((prev) => ({ ...prev, [plantaId]: nextEspacios }));
+
+              const nextKeys = new Set(nextEspacios.map((e) => `${plantaId}/${e.id}` as EspacioKey));
+              for (const [key, unsubCamas] of camasMap.entries()) {
+                if (!key.startsWith(`${plantaId}/`)) continue;
+                if (!nextKeys.has(key)) {
+                  unsubCamas();
+                  camasMap.delete(key);
+                  setCamasByEspacio((prev) => {
+                    const copy = { ...prev };
+                    delete copy[key];
+                    return copy;
+                  });
+                }
+              }
+
+              for (const espacio of nextEspacios) {
+                const key = `${plantaId}/${espacio.id}` as EspacioKey;
+                if (camasMap.has(key)) continue;
+
+                const qCamas = query(
+                  camasCollection(hostelId, plantaId, espacio.id),
+                  orderBy("nombre", "asc"),
+                );
+                const unsubCamas = onSnapshot(
+                  qCamas,
+                  (snapCamas) => {
+                    setError(null);
+                    const nextCamas = snapCamas.docs.map((d) => {
+                      const raw = d.data() as Cama & { activo?: boolean };
+                      return { id: d.id, data: raw };
+                    });
+                    setCamasByEspacio((prev) => ({ ...prev, [key]: nextCamas }));
+                  },
+                  (e) => setError(errorMessage(e, "Error leyendo camas")),
+                );
+
+                camasMap.set(key, unsubCamas);
+              }
+            },
+            (e) => setError(errorMessage(e, "Error leyendo espacios")),
+          );
+
+          espaciosMap.set(plantaId, unsubEspacios);
+        }
+      },
+      (e) => setError(errorMessage(e, "Error leyendo plantas")),
+    );
+
+    const qReservas = query(reservasCollection(hostelId), orderBy("checkin", "desc"));
+    const unsubReservas = onSnapshot(
+      qReservas,
+      (snap) => {
+        setError(null);
+        const next = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+        setReservas(next);
+        setSelectedReservaId((prev) => (prev && next.some((r) => r.id === prev) ? prev : null));
+      },
+      (e) => setError(errorMessage(e, "Error leyendo reservas")),
+    );
+
+    return () => {
+      unsubPlantas();
+      unsubReservas();
+      for (const u of espaciosMap.values()) u();
+      for (const u of camasMap.values()) u();
+      espaciosMap.clear();
+      camasMap.clear();
+    };
+  }, [hostelId]);
+
+  const espaciosFlat = useMemo(() => {
+    const out: Array<{ key: EspacioKey; plantaId: Id; espacioId: Id; label: string }> = [];
+    for (const planta of plantas) {
+      const espacios = espaciosByPlanta[planta.id] ?? [];
+      for (const espacio of espacios) {
+        out.push({
+          key: `${planta.id}/${espacio.id}` as EspacioKey,
+          plantaId: planta.id,
+          espacioId: espacio.id,
+          label: `${planta.data.nombre || "Planta"} · ${espacio.data.nombre || "Espacio"}`,
+        });
+      }
+    }
+    return out;
+  }, [espaciosByPlanta, plantas]);
+
+  const espacioNameByKey = useMemo(() => {
+    const map = new Map<EspacioKey, { plantaName: string; espacioName: string }>();
+    for (const planta of plantas) {
+      const plantaName = planta.data.nombre || planta.id;
+      for (const espacio of espaciosByPlanta[planta.id] ?? []) {
+        map.set(`${planta.id}/${espacio.id}` as EspacioKey, {
+          plantaName,
+          espacioName: espacio.data.nombre || espacio.id,
+        });
+      }
+    }
+    return map;
+  }, [espaciosByPlanta, plantas]);
+
+  const camaNameByKey = useMemo(() => {
+    const map = new Map<CamaKey, { camaName: string; camaActivo: boolean }>();
+    for (const [espacioKey, camas] of Object.entries(camasByEspacio) as Array<
+      [EspacioKey, CamaNode[]]
+    >) {
+      const [plantaId, espacioId] = espacioKey.split("/") as [Id, Id];
+      for (const cama of camas) {
+        const k = `${plantaId}/${espacioId}/${cama.id}` as CamaKey;
+        map.set(k, { camaName: cama.data.nombre || cama.id, camaActivo: cama.data.activo !== false });
+      }
+    }
+    return map;
+  }, [camasByEspacio]);
+
+  const filteredReservas = useMemo(() => {
+    const q = queryText.trim().toLowerCase();
+    const date = parseYmd(filterDate);
+
+    return reservas.filter((r) => {
+      if (filterEstado !== "todas" && r.data.estado !== filterEstado) return false;
+
+      if (filterEspacioKey) {
+        const k = `${r.data.plantaId}/${r.data.espacioId}` as EspacioKey;
+        if (k !== filterEspacioKey) return false;
+      }
+
+      if (date) {
+        const d0 = new Date(date);
+        const d1 = new Date(date);
+        d0.setHours(0, 0, 0, 0);
+        d1.setHours(23, 59, 59, 999);
+        const checkin = r.data.checkin.toDate();
+        const checkout = r.data.checkout.toDate();
+        if (!overlaps(checkin, checkout, d0, d1)) return false;
+      }
+
+      if (q) {
+        const h = r.data.huesped;
+        const space = espacioNameByKey.get(`${r.data.plantaId}/${r.data.espacioId}` as EspacioKey);
+        const cama = camaNameByKey.get(
+          `${r.data.plantaId}/${r.data.espacioId}/${r.data.camaId}` as CamaKey,
+        );
+        const haystack = [
+          h?.nombre,
+          h?.telefono,
+          h?.email,
+          h?.dni,
+          space?.plantaName,
+          space?.espacioName,
+          cama?.camaName,
+          r.id,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+
+      return true;
+    });
+  }, [camaNameByKey, espacioNameByKey, filterDate, filterEspacioKey, filterEstado, queryText, reservas]);
+
+  const selectedReserva = useMemo(() => {
+    if (!selectedReservaId) return null;
+    return reservas.find((r) => r.id === selectedReservaId) ?? null;
+  }, [reservas, selectedReservaId]);
+
+  const activeCount = filteredReservas.length;
+  const totalCount = reservas.length;
+
+  function quickActionLabel(estado: ReservaEstado) {
+    switch (estado) {
+      case "confirmada":
+        return "Check-in";
+      case "en_curso":
+        return "Check-out";
+      case "pendiente":
+        return "Confirmar";
+      default:
+        return null;
+    }
+  }
+
+  async function setEstado(reservaId: Id, next: ReservaEstado) {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateDoc(reservaRef(hostelId, reservaId), { estado: next } satisfies Partial<Reserva>);
+    } catch (e: unknown) {
+      setError(errorMessage(e, "Error actualizando reserva"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onQuickAction(r: ReservaNode) {
+    const s = r.data.estado;
+    if (s === "confirmada") return setEstado(r.id, "en_curso");
+    if (s === "en_curso") return setEstado(r.id, "completada");
+    if (s === "pendiente") return setEstado(r.id, "confirmada");
+  }
+
+  // Modal: Nueva reserva (3 pasos)
+  const [newOpen, setNewOpen] = useState(false);
+  const [newStep, setNewStep] = useState<1 | 2 | 3>(1);
+
+  const [newCheckin, setNewCheckin] = useState(() => toYmd(new Date()));
+  const [newCheckout, setNewCheckout] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return toYmd(d);
+  });
+  const [newBedKey, setNewBedKey] = useState<CamaKey | "">("");
+
+  const [newNombre, setNewNombre] = useState("");
+  const [newTelefono, setNewTelefono] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newDni, setNewDni] = useState("");
+  const [newEstado, setNewEstado] = useState<Extract<ReservaEstado, "pendiente" | "confirmada">>(
+    "pendiente",
+  );
+  const [newNotas, setNewNotas] = useState("");
+
+  const newCheckinDate = useMemo(() => parseYmd(newCheckin), [newCheckin]);
+  const newCheckoutDate = useMemo(() => parseYmd(newCheckout), [newCheckout]);
+
+  const activeStatuses = useMemo(() => new Set<ReservaEstado>(["pendiente", "confirmada", "en_curso"]), []);
+
+  const availableBeds = useMemo(() => {
+    if (!newCheckinDate || !newCheckoutDate) return [];
+    if (newCheckoutDate <= newCheckinDate) return [];
+
+    const out: Array<{
+      key: CamaKey;
+      label: string;
+      plantaId: Id;
+      espacioId: Id;
+      camaId: Id;
+    }> = [];
+
+    for (const [espacioKey, camas] of Object.entries(camasByEspacio) as Array<
+      [EspacioKey, CamaNode[]]
+    >) {
+      const [plantaId, espacioId] = espacioKey.split("/") as [Id, Id];
+      const space = espacioNameByKey.get(espacioKey);
+      const spaceLabel = space ? `${space.plantaName} · ${space.espacioName}` : `${plantaId}/${espacioId}`;
+
+      for (const cama of camas) {
+        const camaId = cama.id;
+        const camaActivo = cama.data.activo !== false; // requisito: mostrar solo activo:true
+        if (!camaActivo) continue;
+
+        // criterio simple: no permitir camas no "libre" (si existe el campo)
+        if (cama.data.estado && cama.data.estado !== "libre") continue;
+
+        const hasOverlap = reservas.some((r) => {
+          if (!activeStatuses.has(r.data.estado)) return false;
+          if (r.data.plantaId !== plantaId) return false;
+          if (r.data.espacioId !== espacioId) return false;
+          if (r.data.camaId !== camaId) return false;
+          return overlaps(
+            r.data.checkin.toDate(),
+            r.data.checkout.toDate(),
+            newCheckinDate,
+            newCheckoutDate,
+          );
+        });
+        if (hasOverlap) continue;
+
+        const key = `${plantaId}/${espacioId}/${camaId}` as CamaKey;
+        out.push({
+          key,
+          plantaId,
+          espacioId,
+          camaId,
+          label: `${spaceLabel} · ${cama.data.nombre || camaId}`,
+        });
+      }
+    }
+
+    out.sort((a, b) => a.label.localeCompare(b.label));
+    return out;
+  }, [activeStatuses, camasByEspacio, espacioNameByKey, newCheckinDate, newCheckoutDate, reservas]);
+
+  const newNights = useMemo(() => {
+    if (!newCheckinDate || !newCheckoutDate) return 0;
+    if (newCheckoutDate <= newCheckinDate) return 0;
+    return nightsBetween(newCheckinDate, newCheckoutDate);
+  }, [newCheckinDate, newCheckoutDate]);
+
+  function resetNewReserva() {
+    setNewStep(1);
+    setNewCheckin(toYmd(new Date()));
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    setNewCheckout(toYmd(d));
+    setNewBedKey("");
+    setNewNombre("");
+    setNewTelefono("");
+    setNewEmail("");
+    setNewDni("");
+    setNewEstado("pendiente");
+    setNewNotas("");
+  }
+
+  async function onCreateReserva() {
+    if (!newCheckinDate || !newCheckoutDate) {
+      setError("Completá las fechas.");
+      return;
+    }
+    if (newCheckoutDate <= newCheckinDate) {
+      setError("El checkout debe ser posterior al check-in.");
+      return;
+    }
+    if (!newBedKey) {
+      setError("Seleccioná una cama disponible.");
+      return;
+    }
+    const [plantaId, espacioId, camaId] = newBedKey.split("/") as [Id, Id, Id];
+
+    setBusy(true);
+    setError(null);
+    try {
+      await addDoc(reservasCollection(hostelId), {
+        plantaId,
+        espacioId,
+        camaId,
+        checkin: Timestamp.fromDate(newCheckinDate),
+        checkout: Timestamp.fromDate(newCheckoutDate),
+        estado: newEstado,
+        huesped: {
+          nombre: newNombre.trim(),
+          telefono: newTelefono.trim(),
+          email: newEmail.trim(),
+          dni: newDni.trim(),
+        },
+        notas: newNotas.trim(),
+      } satisfies Reserva);
+
+      setNewOpen(false);
+      resetNewReserva();
+    } catch (e: unknown) {
+      setError(errorMessage(e, "Error creando reserva"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const detail = selectedReserva;
+  const detailSpace = detail
+    ? espacioNameByKey.get(`${detail.data.plantaId}/${detail.data.espacioId}` as EspacioKey)
+    : null;
+  const detailCama = detail
+    ? camaNameByKey.get(
+        `${detail.data.plantaId}/${detail.data.espacioId}/${detail.data.camaId}` as CamaKey,
+      )
+    : null;
+
+  return (
+    <div className="space-y-5 text-[var(--text-primary)]" style={{ backgroundColor: "var(--bg-page)" }}>
+      {/* Topbar */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
+            Reservas
+          </h1>
+          <p className="mt-1 text-sm text-[var(--text-tertiary)]">
+            {activeCount} resultado{activeCount === 1 ? "" : "s"}
+            {queryText || filterEspacioKey || filterDate || filterEstado !== "todas"
+              ? ` (de ${totalCount})`
+              : ""}
+          </p>
+        </div>
+
+        <PrimaryButton
+          type="button"
+          onClick={() => {
+            setNewOpen(true);
+            setError(null);
+          }}
+        >
+          + Nueva reserva
+        </PrimaryButton>
+      </div>
+
+      {/* Filtros */}
+      <section
+        className="
+          rounded-2xl border border-[var(--border-secondary)] bg-[var(--bg-component)] p-4 shadow-sm
+        "
+      >
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.6fr_1fr_0.9fr_0.9fr]">
+          <TextInput
+            placeholder="Buscar por huésped, contacto, DNI, habitación, cama…"
+            value={queryText}
+            onChange={(e) => setQueryText(e.target.value)}
+          />
+
+          <Select
+            value={filterEspacioKey}
+            onChange={(e) => setFilterEspacioKey(e.target.value as EspacioKey | "")}
+          >
+            <option value="">Todas las habitaciones</option>
+            {espaciosFlat.map((e) => (
+              <option key={e.key} value={e.key}>
+                {e.label}
+              </option>
+            ))}
+          </Select>
+
+          <TextInput
+            type="date"
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
+          />
+
+          <Select
+            value={filterEstado}
+            onChange={(e) => setFilterEstado(e.target.value as ReservaEstado | "todas")}
+          >
+            {ESTADOS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        {/* Tabs rápidas */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {ESTADOS.map((t) => {
+            const active = filterEstado === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setFilterEstado(t.id as ReservaEstado | "todas")}
+                className={cx(
+                  "rounded-xl border px-3 py-2 text-sm transition",
+                  active
+                    ? "border-[var(--border-primary)] bg-[var(--bg-list)] text-[var(--text-primary)]"
+                    : "border-[var(--border-secondary)] bg-[var(--bg-page)] text-[var(--text-secondary)] hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]",
+                )}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {error ? (
+        <div
+          className="rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-component)] p-3 text-sm"
+          style={{ borderColor: "rgba(255, 99, 99, 0.45)" }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      {/* Lista + detalle */}
+      <section
+        className="
+          grid gap-5 rounded-2xl border border-[var(--border-secondary)] bg-[var(--bg-component)] p-4 shadow-sm
+        "
+        style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 420px)" }}
+      >
+        <div className="min-w-0">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-[var(--text-primary)]">Lista de reservas</div>
+          </div>
+
+          <div className="mt-3 overflow-hidden rounded-2xl border border-[var(--border-secondary)]">
+            <div className="divide-y divide-[var(--border-secondary)]">
+              {filteredReservas.length === 0 ? (
+                <div className="bg-[var(--bg-page)] p-4 text-sm text-[var(--text-tertiary)]">
+                  No hay reservas con estos filtros.
+                </div>
+              ) : (
+                filteredReservas.map((r) => {
+                  const isSelected = selectedReservaId === r.id;
+                  const huesped = r.data.huesped;
+                  const contacto = huesped.telefono || huesped.email || "—";
+                  const space = espacioNameByKey.get(`${r.data.plantaId}/${r.data.espacioId}` as EspacioKey);
+                  const cama = camaNameByKey.get(
+                    `${r.data.plantaId}/${r.data.espacioId}/${r.data.camaId}` as CamaKey,
+                  );
+
+                  const checkin = r.data.checkin.toDate();
+                  const checkout = r.data.checkout.toDate();
+                  const noches = nightsBetween(checkin, checkout);
+
+                  const colors = badgeColors(r.data.estado);
+                  const qa = quickActionLabel(r.data.estado);
+
+                  return (
+                    <div
+                      key={r.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isSelected}
+                      onClick={() =>
+                        setSelectedReservaId((prev) => (prev === r.id ? null : r.id))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedReservaId((prev) => (prev === r.id ? null : r.id));
+                        }
+                      }}
+                      className={cx(
+                        "w-full cursor-pointer bg-[var(--bg-page)] p-4 text-left transition outline-none",
+                        isSelected ? "bg-[var(--bg-list)]" : "hover:bg-[var(--bg-list)]",
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-[var(--text-primary)]">
+                            {huesped?.nombre || "Huésped"}
+                          </div>
+                          <div className="mt-0.5 truncate text-xs text-[var(--text-tertiary)]">
+                            {contacto}
+                            {" · "}
+                            {space ? `${space.espacioName}` : r.data.espacioId}
+                            {cama ? ` / ${cama.camaName}` : r.data.camaId ? ` / ${r.data.camaId}` : ""}
+                          </div>
+                          <div className="mt-2 text-xs text-[var(--text-secondary)]">
+                            {checkin.toLocaleDateString("es-AR")}
+                            {" → "}
+                            {checkout.toLocaleDateString("es-AR")}
+                            {" · "}
+                            {noches} noche{noches === 1 ? "" : "s"}
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 flex-col items-end gap-2">
+                          <span
+                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+                            style={{ backgroundColor: colors.bg, color: colors.fg }}
+                          >
+                            {ESTADO_LABEL[r.data.estado]}
+                          </span>
+
+                          {qa ? (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                void onQuickAction(r);
+                              }}
+                              className="
+                                rounded-lg border border-[var(--border-secondary)] bg-[var(--bg-component)]
+                                px-2.5 py-1 text-xs font-medium text-[var(--text-primary)]
+                                transition hover:bg-[var(--bg-list)] disabled:opacity-50
+                              "
+                            >
+                              {qa}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        <aside className="min-w-0">
+          <div className="rounded-2xl border border-[var(--border-secondary)] bg-[var(--bg-page)] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">Detalle</div>
+                <div className="mt-1 text-xs text-[var(--text-tertiary)]">
+                  Click en una reserva para expandir.
+                </div>
+              </div>
+              {detail ? (
+                <span
+                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+                  style={{
+                    backgroundColor: badgeColors(detail.data.estado).bg,
+                    color: badgeColors(detail.data.estado).fg,
+                  }}
+                >
+                  {ESTADO_LABEL[detail.data.estado]}
+                </span>
+              ) : null}
+            </div>
+
+            {!detail ? (
+              <div className="mt-4 text-sm text-[var(--text-tertiary)]">
+                Seleccioná una reserva de la lista.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div className="rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-component)] p-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
+                    Huésped
+                  </div>
+                  <div className="mt-2 grid grid-cols-1 gap-2 text-sm">
+                    <div>
+                      <div className="text-xs text-[var(--text-tertiary)]">Nombre</div>
+                      <div className="font-medium">{detail.data.huesped?.nombre || "—"}</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-xs text-[var(--text-tertiary)]">Teléfono</div>
+                        <div className="font-medium">{detail.data.huesped?.telefono || "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-[var(--text-tertiary)]">Email</div>
+                        <div className="font-medium">{detail.data.huesped?.email || "—"}</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-[var(--text-tertiary)]">DNI</div>
+                      <div className="font-medium">{detail.data.huesped?.dni || "—"}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-component)] p-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
+                    Estadia
+                  </div>
+                  <div className="mt-2 text-sm">
+                    <div className="text-[var(--text-secondary)]">
+                      {detailSpace ? `${detailSpace.plantaName} · ${detailSpace.espacioName}` : detail.data.espacioId}
+                      {detailCama ? ` / ${detailCama.camaName}` : detail.data.camaId ? ` / ${detail.data.camaId}` : ""}
+                    </div>
+                    <div className="mt-1 text-[var(--text-secondary)]">
+                      {detail.data.checkin.toDate().toLocaleDateString("es-AR")}
+                      {" → "}
+                      {detail.data.checkout.toDate().toLocaleDateString("es-AR")}
+                      {" · "}
+                      {nightsBetween(detail.data.checkin.toDate(), detail.data.checkout.toDate())}{" "}
+                      noche(s)
+                    </div>
+                    {detail.data.notas?.trim() ? (
+                      <div className="mt-3 whitespace-pre-wrap rounded-lg border border-[var(--border-secondary)] bg-[var(--bg-page)] p-2 text-xs text-[var(--text-secondary)]">
+                        {detail.data.notas}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <SecondaryButton type="button" disabled>
+                    Editar
+                  </SecondaryButton>
+
+                  {detail.data.estado === "confirmada" ? (
+                    <PrimaryButton
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void setEstado(detail.id, "en_curso")}
+                    >
+                      Hacer check-in
+                    </PrimaryButton>
+                  ) : null}
+
+                  {detail.data.estado === "en_curso" ? (
+                    <PrimaryButton
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void setEstado(detail.id, "completada")}
+                    >
+                      Hacer check-out
+                    </PrimaryButton>
+                  ) : null}
+
+                  {detail.data.estado === "pendiente" ? (
+                    <PrimaryButton
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void setEstado(detail.id, "confirmada")}
+                    >
+                      Confirmar
+                    </PrimaryButton>
+                  ) : null}
+
+                  {detail.data.estado !== "cancelada" && detail.data.estado !== "completada" ? (
+                    <DangerButton
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        const ok = confirm("¿Cancelar esta reserva?");
+                        if (!ok) return;
+                        void setEstado(detail.id, "cancelada");
+                      }}
+                    >
+                      Cancelar reserva
+                    </DangerButton>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
+      </section>
+
+      {/* Modal Nueva reserva */}
+      <Modal
+        open={newOpen}
+        title={`Nueva reserva · Paso ${newStep} de 3`}
+        onClose={() => {
+          setNewOpen(false);
+          resetNewReserva();
+        }}
+      >
+        {newStep === 1 ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <div className="text-xs font-medium text-[var(--text-secondary)]">Check-in</div>
+                <div className="mt-1">
+                  <TextInput
+                    type="date"
+                    value={newCheckin}
+                    onChange={(e) => {
+                      setNewCheckin(e.target.value);
+                      setNewBedKey("");
+                    }}
+                  />
+                </div>
+              </label>
+              <label className="block">
+                <div className="text-xs font-medium text-[var(--text-secondary)]">Check-out</div>
+                <div className="mt-1">
+                  <TextInput
+                    type="date"
+                    value={newCheckout}
+                    onChange={(e) => {
+                      setNewCheckout(e.target.value);
+                      setNewBedKey("");
+                    }}
+                  />
+                </div>
+              </label>
+            </div>
+
+            <label className="block">
+              <div className="text-xs font-medium text-[var(--text-secondary)]">
+                Cama disponible
+              </div>
+              <div className="mt-1">
+                <Select value={newBedKey} onChange={(e) => setNewBedKey(e.target.value as CamaKey)}>
+                  <option value="">
+                    {newCheckoutDate && newCheckinDate && newCheckoutDate > newCheckinDate
+                      ? availableBeds.length === 0
+                        ? "Sin camas disponibles"
+                        : `Seleccionar (${availableBeds.length} disponibles)`
+                      : "Seleccionar (primero elegí fechas válidas)"}
+                  </option>
+                  {availableBeds.map((b) => (
+                    <option key={b.key} value={b.key}>
+                      {b.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="mt-1 text-xs text-[var(--text-tertiary)]" style={{ opacity: 0.9 }}>
+                Se muestran solo camas visibles (<code>activo</code>) sin reservas activas superpuestas.
+              </div>
+            </label>
+
+            <div className="flex items-center justify-between gap-3">
+              <SecondaryButton
+                type="button"
+                onClick={() => {
+                  setNewOpen(false);
+                  resetNewReserva();
+                }}
+              >
+                Cancelar
+              </SecondaryButton>
+              <PrimaryButton
+                type="button"
+                disabled={!newBedKey || !newCheckinDate || !newCheckoutDate || newCheckoutDate <= newCheckinDate}
+                onClick={() => setNewStep(2)}
+              >
+                Continuar
+              </PrimaryButton>
+            </div>
+          </div>
+        ) : null}
+
+        {newStep === 2 ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <div className="text-xs font-medium text-[var(--text-secondary)]">Nombre</div>
+                <div className="mt-1">
+                  <TextInput value={newNombre} onChange={(e) => setNewNombre(e.target.value)} />
+                </div>
+              </label>
+              <label className="block">
+                <div className="text-xs font-medium text-[var(--text-secondary)]">Teléfono</div>
+                <div className="mt-1">
+                  <TextInput
+                    value={newTelefono}
+                    onChange={(e) => setNewTelefono(e.target.value)}
+                  />
+                </div>
+              </label>
+              <label className="block">
+                <div className="text-xs font-medium text-[var(--text-secondary)]">Email</div>
+                <div className="mt-1">
+                  <TextInput value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+                </div>
+              </label>
+              <label className="block">
+                <div className="text-xs font-medium text-[var(--text-secondary)]">DNI</div>
+                <div className="mt-1">
+                  <TextInput value={newDni} onChange={(e) => setNewDni(e.target.value)} />
+                </div>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[220px_1fr]">
+              <label className="block">
+                <div className="text-xs font-medium text-[var(--text-secondary)]">Estado inicial</div>
+                <div className="mt-1">
+                  <Select
+                    value={newEstado}
+                    onChange={(e) => setNewEstado(e.target.value as typeof newEstado)}
+                  >
+                    <option value="pendiente">Pendiente</option>
+                    <option value="confirmada">Confirmada</option>
+                  </Select>
+                </div>
+              </label>
+
+              <label className="block">
+                <div className="text-xs font-medium text-[var(--text-secondary)]">Notas</div>
+                <div className="mt-1">
+                  <textarea
+                    value={newNotas}
+                    onChange={(e) => setNewNotas(e.target.value)}
+                    className="
+                      min-h-[42px] w-full resize-y rounded-xl border border-[var(--border-secondary)]
+                      bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none
+                      focus:border-[var(--border-primary)]
+                    "
+                  />
+                </div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <SecondaryButton type="button" onClick={() => setNewStep(1)}>
+                Volver
+              </SecondaryButton>
+              <PrimaryButton
+                type="button"
+                disabled={!newNombre.trim()}
+                onClick={() => setNewStep(3)}
+              >
+                Continuar
+              </PrimaryButton>
+            </div>
+          </div>
+        ) : null}
+
+        {newStep === 3 ? (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-[var(--border-secondary)] bg-[var(--bg-page)] p-4">
+              <div className="text-sm font-semibold text-[var(--text-primary)]">Resumen</div>
+              <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-[var(--text-secondary)]">
+                <div>
+                  <span className="text-[var(--text-tertiary)]">Huésped: </span>
+                  <span className="font-medium text-[var(--text-primary)]">
+                    {newNombre.trim() || "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[var(--text-tertiary)]">Contacto: </span>
+                  {newTelefono.trim() || newEmail.trim() || "—"}
+                </div>
+                <div>
+                  <span className="text-[var(--text-tertiary)]">Fechas: </span>
+                  {newCheckinDate?.toLocaleDateString("es-AR") ?? "—"}
+                  {" → "}
+                  {newCheckoutDate?.toLocaleDateString("es-AR") ?? "—"}
+                  {" · "}
+                  {newNights} noche(s)
+                </div>
+                <div>
+                  <span className="text-[var(--text-tertiary)]">Cama: </span>
+                  {newBedKey
+                    ? camaNameByKey.get(newBedKey)?.camaName ||
+                      availableBeds.find((b) => b.key === newBedKey)?.label ||
+                      newBedKey
+                    : "—"}
+                </div>
+                <div>
+                  <span className="text-[var(--text-tertiary)]">Estado inicial: </span>
+                  <span className="font-medium text-[var(--text-primary)]">
+                    {newEstado === "confirmada" ? "Confirmada" : "Pendiente"}
+                  </span>
+                </div>
+                {newNotas.trim() ? (
+                  <div className="pt-2">
+                    <div className="text-[var(--text-tertiary)]">Notas</div>
+                    <div className="mt-1 whitespace-pre-wrap rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-component)] p-2 text-xs">
+                      {newNotas.trim()}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <SecondaryButton type="button" onClick={() => setNewStep(2)}>
+                Volver
+              </SecondaryButton>
+              <PrimaryButton type="button" disabled={busy} onClick={() => void onCreateReserva()}>
+                {busy ? "Creando..." : "Confirmar reserva"}
+              </PrimaryButton>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+    </div>
+  );
+}
+
