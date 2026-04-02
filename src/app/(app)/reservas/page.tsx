@@ -2,11 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  addDoc,
   onSnapshot,
   orderBy,
   query,
-  Timestamp,
   updateDoc,
 } from "firebase/firestore";
 import type { Cama, Espacio, Planta, Reserva, ReservaEstado } from "@/lib/db";
@@ -17,6 +15,12 @@ import {
   reservaRef,
   reservasCollection,
 } from "@/lib/db";
+import {
+  NuevaReservaModal,
+  type CamaNode as ModalCamaNode,
+  type EspacioKey as ModalEspacioKey,
+  type ReservaNode as ModalReservaNode,
+} from "@/components/NuevaReservaModal";
 
 type Id = string;
 type PlantaNode = { id: Id; data: Planta };
@@ -159,48 +163,6 @@ function DangerButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
       )}
       style={{ borderColor: "rgba(255, 99, 99, 0.45)" }}
     />
-  );
-}
-
-function Modal({
-  open,
-  title,
-  children,
-  onClose,
-}: {
-  open: boolean;
-  title: string;
-  children: React.ReactNode;
-  onClose: () => void;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/40"
-        onClick={onClose}
-        aria-label="Cerrar modal"
-      />
-      <div
-        className="
-          relative w-full max-w-2xl rounded-2xl border border-[var(--border-secondary)]
-          bg-[var(--bg-component)] shadow-xl
-        "
-      >
-        <div className="flex items-center justify-between border-b border-[var(--border-secondary)] px-5 py-4">
-          <div className="text-base font-semibold text-[var(--text-primary)]">{title}</div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-2 py-1 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-list)]"
-          >
-            Esc
-          </button>
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
   );
 }
 
@@ -466,152 +428,7 @@ export default function ReservasPage() {
     if (s === "pendiente") return setEstado(r.id, "confirmada");
   }
 
-  // Modal: Nueva reserva (3 pasos)
   const [newOpen, setNewOpen] = useState(false);
-  const [newStep, setNewStep] = useState<1 | 2 | 3>(1);
-
-  const [newCheckin, setNewCheckin] = useState(() => toYmd(new Date()));
-  const [newCheckout, setNewCheckout] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return toYmd(d);
-  });
-  const [newBedKey, setNewBedKey] = useState<CamaKey | "">("");
-
-  const [newNombre, setNewNombre] = useState("");
-  const [newTelefono, setNewTelefono] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [newDni, setNewDni] = useState("");
-  const [newEstado, setNewEstado] = useState<Extract<ReservaEstado, "pendiente" | "confirmada">>(
-    "pendiente",
-  );
-  const [newNotas, setNewNotas] = useState("");
-
-  const newCheckinDate = useMemo(() => parseYmd(newCheckin), [newCheckin]);
-  const newCheckoutDate = useMemo(() => parseYmd(newCheckout), [newCheckout]);
-
-  const activeStatuses = useMemo(() => new Set<ReservaEstado>(["pendiente", "confirmada", "en_curso"]), []);
-
-  const availableBeds = useMemo(() => {
-    if (!newCheckinDate || !newCheckoutDate) return [];
-    if (newCheckoutDate <= newCheckinDate) return [];
-
-    const out: Array<{
-      key: CamaKey;
-      label: string;
-      plantaId: Id;
-      espacioId: Id;
-      camaId: Id;
-    }> = [];
-
-    for (const [espacioKey, camas] of Object.entries(camasByEspacio) as Array<
-      [EspacioKey, CamaNode[]]
-    >) {
-      const [plantaId, espacioId] = espacioKey.split("/") as [Id, Id];
-      const space = espacioNameByKey.get(espacioKey);
-      const spaceLabel = space ? `${space.plantaName} · ${space.espacioName}` : `${plantaId}/${espacioId}`;
-
-      for (const cama of camas) {
-        const camaId = cama.id;
-        const camaActivo = cama.data.activo !== false; // requisito: mostrar solo activo:true
-        if (!camaActivo) continue;
-
-        // criterio simple: no permitir camas no "libre" (si existe el campo)
-        if (cama.data.estado && cama.data.estado !== "libre") continue;
-
-        const hasOverlap = reservas.some((r) => {
-          if (!activeStatuses.has(r.data.estado)) return false;
-          if (r.data.plantaId !== plantaId) return false;
-          if (r.data.espacioId !== espacioId) return false;
-          if (r.data.camaId !== camaId) return false;
-          return overlaps(
-            r.data.checkin.toDate(),
-            r.data.checkout.toDate(),
-            newCheckinDate,
-            newCheckoutDate,
-          );
-        });
-        if (hasOverlap) continue;
-
-        const key = `${plantaId}/${espacioId}/${camaId}` as CamaKey;
-        out.push({
-          key,
-          plantaId,
-          espacioId,
-          camaId,
-          label: `${spaceLabel} · ${cama.data.nombre || camaId}`,
-        });
-      }
-    }
-
-    out.sort((a, b) => a.label.localeCompare(b.label));
-    return out;
-  }, [activeStatuses, camasByEspacio, espacioNameByKey, newCheckinDate, newCheckoutDate, reservas]);
-
-  const newNights = useMemo(() => {
-    if (!newCheckinDate || !newCheckoutDate) return 0;
-    if (newCheckoutDate <= newCheckinDate) return 0;
-    return nightsBetween(newCheckinDate, newCheckoutDate);
-  }, [newCheckinDate, newCheckoutDate]);
-
-  function resetNewReserva() {
-    setNewStep(1);
-    setNewCheckin(toYmd(new Date()));
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    setNewCheckout(toYmd(d));
-    setNewBedKey("");
-    setNewNombre("");
-    setNewTelefono("");
-    setNewEmail("");
-    setNewDni("");
-    setNewEstado("pendiente");
-    setNewNotas("");
-  }
-
-  async function onCreateReserva() {
-    if (!newCheckinDate || !newCheckoutDate) {
-      setError("Completá las fechas.");
-      return;
-    }
-    if (newCheckoutDate <= newCheckinDate) {
-      setError("El checkout debe ser posterior al check-in.");
-      return;
-    }
-    if (!newBedKey) {
-      setError("Seleccioná una cama disponible.");
-      return;
-    }
-    const [plantaId, espacioId, camaId] = newBedKey.split("/") as [Id, Id, Id];
-
-    setBusy(true);
-    setError(null);
-    try {
-      await addDoc(reservasCollection(hostelId), {
-        plantaId,
-        espacioId,
-        camaId,
-        checkin: Timestamp.fromDate(newCheckinDate),
-        checkout: Timestamp.fromDate(newCheckoutDate),
-        estado: newEstado,
-        huesped: {
-          nombre: newNombre.trim(),
-          telefono: newTelefono.trim(),
-          email: newEmail.trim(),
-          dni: newDni.trim(),
-        },
-        notas: newNotas.trim(),
-      } satisfies Reserva);
-
-      setNewOpen(false);
-      resetNewReserva();
-    } catch (e: unknown) {
-      setError(errorMessage(e, "Error creando reserva"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const detail = selectedReserva;
   const detailSpace = detail
     ? espacioNameByKey.get(`${detail.data.plantaId}/${detail.data.espacioId}` as EspacioKey)
@@ -969,228 +786,14 @@ export default function ReservasPage() {
         </aside>
       </section>
 
-      {/* Modal Nueva reserva */}
-      <Modal
+      <NuevaReservaModal
         open={newOpen}
-        title={`Nueva reserva · Paso ${newStep} de 3`}
-        onClose={() => {
-          setNewOpen(false);
-          resetNewReserva();
-        }}
-      >
-        {newStep === 1 ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="block">
-                <div className="text-xs font-medium text-[var(--text-secondary)]">Check-in</div>
-                <div className="mt-1">
-                  <TextInput
-                    type="date"
-                    value={newCheckin}
-                    onChange={(e) => {
-                      setNewCheckin(e.target.value);
-                      setNewBedKey("");
-                    }}
-                  />
-                </div>
-              </label>
-              <label className="block">
-                <div className="text-xs font-medium text-[var(--text-secondary)]">Check-out</div>
-                <div className="mt-1">
-                  <TextInput
-                    type="date"
-                    value={newCheckout}
-                    onChange={(e) => {
-                      setNewCheckout(e.target.value);
-                      setNewBedKey("");
-                    }}
-                  />
-                </div>
-              </label>
-            </div>
-
-            <label className="block">
-              <div className="text-xs font-medium text-[var(--text-secondary)]">
-                Cama disponible
-              </div>
-              <div className="mt-1">
-                <Select value={newBedKey} onChange={(e) => setNewBedKey(e.target.value as CamaKey)}>
-                  <option value="">
-                    {newCheckoutDate && newCheckinDate && newCheckoutDate > newCheckinDate
-                      ? availableBeds.length === 0
-                        ? "Sin camas disponibles"
-                        : `Seleccionar (${availableBeds.length} disponibles)`
-                      : "Seleccionar (primero elegí fechas válidas)"}
-                  </option>
-                  {availableBeds.map((b) => (
-                    <option key={b.key} value={b.key}>
-                      {b.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="mt-1 text-xs text-[var(--text-tertiary)]" style={{ opacity: 0.9 }}>
-                Se muestran solo camas visibles (<code>activo</code>) sin reservas activas superpuestas.
-              </div>
-            </label>
-
-            <div className="flex items-center justify-between gap-3">
-              <SecondaryButton
-                type="button"
-                onClick={() => {
-                  setNewOpen(false);
-                  resetNewReserva();
-                }}
-              >
-                Cancelar
-              </SecondaryButton>
-              <PrimaryButton
-                type="button"
-                disabled={!newBedKey || !newCheckinDate || !newCheckoutDate || newCheckoutDate <= newCheckinDate}
-                onClick={() => setNewStep(2)}
-              >
-                Continuar
-              </PrimaryButton>
-            </div>
-          </div>
-        ) : null}
-
-        {newStep === 2 ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="block">
-                <div className="text-xs font-medium text-[var(--text-secondary)]">Nombre</div>
-                <div className="mt-1">
-                  <TextInput value={newNombre} onChange={(e) => setNewNombre(e.target.value)} />
-                </div>
-              </label>
-              <label className="block">
-                <div className="text-xs font-medium text-[var(--text-secondary)]">Teléfono</div>
-                <div className="mt-1">
-                  <TextInput
-                    value={newTelefono}
-                    onChange={(e) => setNewTelefono(e.target.value)}
-                  />
-                </div>
-              </label>
-              <label className="block">
-                <div className="text-xs font-medium text-[var(--text-secondary)]">Email</div>
-                <div className="mt-1">
-                  <TextInput value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
-                </div>
-              </label>
-              <label className="block">
-                <div className="text-xs font-medium text-[var(--text-secondary)]">DNI</div>
-                <div className="mt-1">
-                  <TextInput value={newDni} onChange={(e) => setNewDni(e.target.value)} />
-                </div>
-              </label>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[220px_1fr]">
-              <label className="block">
-                <div className="text-xs font-medium text-[var(--text-secondary)]">Estado inicial</div>
-                <div className="mt-1">
-                  <Select
-                    value={newEstado}
-                    onChange={(e) => setNewEstado(e.target.value as typeof newEstado)}
-                  >
-                    <option value="pendiente">Pendiente</option>
-                    <option value="confirmada">Confirmada</option>
-                  </Select>
-                </div>
-              </label>
-
-              <label className="block">
-                <div className="text-xs font-medium text-[var(--text-secondary)]">Notas</div>
-                <div className="mt-1">
-                  <textarea
-                    value={newNotas}
-                    onChange={(e) => setNewNotas(e.target.value)}
-                    className="
-                      min-h-[42px] w-full resize-y rounded-xl border border-[var(--border-secondary)]
-                      bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none
-                      focus:border-[var(--border-primary)]
-                    "
-                  />
-                </div>
-              </label>
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <SecondaryButton type="button" onClick={() => setNewStep(1)}>
-                Volver
-              </SecondaryButton>
-              <PrimaryButton
-                type="button"
-                disabled={!newNombre.trim()}
-                onClick={() => setNewStep(3)}
-              >
-                Continuar
-              </PrimaryButton>
-            </div>
-          </div>
-        ) : null}
-
-        {newStep === 3 ? (
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-[var(--border-secondary)] bg-[var(--bg-page)] p-4">
-              <div className="text-sm font-semibold text-[var(--text-primary)]">Resumen</div>
-              <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-[var(--text-secondary)]">
-                <div>
-                  <span className="text-[var(--text-tertiary)]">Huésped: </span>
-                  <span className="font-medium text-[var(--text-primary)]">
-                    {newNombre.trim() || "—"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[var(--text-tertiary)]">Contacto: </span>
-                  {newTelefono.trim() || newEmail.trim() || "—"}
-                </div>
-                <div>
-                  <span className="text-[var(--text-tertiary)]">Fechas: </span>
-                  {newCheckinDate?.toLocaleDateString("es-AR") ?? "—"}
-                  {" → "}
-                  {newCheckoutDate?.toLocaleDateString("es-AR") ?? "—"}
-                  {" · "}
-                  {newNights} noche(s)
-                </div>
-                <div>
-                  <span className="text-[var(--text-tertiary)]">Cama: </span>
-                  {newBedKey
-                    ? camaNameByKey.get(newBedKey)?.camaName ||
-                      availableBeds.find((b) => b.key === newBedKey)?.label ||
-                      newBedKey
-                    : "—"}
-                </div>
-                <div>
-                  <span className="text-[var(--text-tertiary)]">Estado inicial: </span>
-                  <span className="font-medium text-[var(--text-primary)]">
-                    {newEstado === "confirmada" ? "Confirmada" : "Pendiente"}
-                  </span>
-                </div>
-                {newNotas.trim() ? (
-                  <div className="pt-2">
-                    <div className="text-[var(--text-tertiary)]">Notas</div>
-                    <div className="mt-1 whitespace-pre-wrap rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-component)] p-2 text-xs">
-                      {newNotas.trim()}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <SecondaryButton type="button" onClick={() => setNewStep(2)}>
-                Volver
-              </SecondaryButton>
-              <PrimaryButton type="button" disabled={busy} onClick={() => void onCreateReserva()}>
-                {busy ? "Creando..." : "Confirmar reserva"}
-              </PrimaryButton>
-            </div>
-          </div>
-        ) : null}
-      </Modal>
+        onClose={() => setNewOpen(false)}
+        hostelId={hostelId}
+        camasByEspacio={camasByEspacio as unknown as Record<ModalEspacioKey, ModalCamaNode[]>}
+        espacioNameByKey={espacioNameByKey as unknown as Map<ModalEspacioKey, { plantaName: string; espacioName: string }>}
+        reservas={reservas as unknown as ModalReservaNode[]}
+      />
     </div>
   );
 }
