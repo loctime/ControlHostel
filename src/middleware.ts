@@ -1,20 +1,42 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { decodeProtectedHeader, importX509, jwtVerify } from "jose";
 import { SESSION_COOKIE_NAME } from "@/lib/session-cookie";
 
-const JWKS = createRemoteJWKSet(
-  new URL(
-    "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com",
-  ),
-);
+const PUBLIC_KEYS_URL =
+  "https://www.googleapis.com/identitytoolkit/v3/relyingparty/publicKeys";
 
 async function verifyFirebaseSessionCookie(
   token: string,
   projectId: string,
 ): Promise<void> {
-  const issuer = `https://session.firebase.google.com/${projectId}`;
-  await jwtVerify(token, JWKS, {
-    issuer,
+  // La cookie de sesión de Firebase es un JWT firmado. El header trae un `kid`
+  // que define cuál cert (de los publicKeys) usar para validar la firma.
+  const protectedHeader = decodeProtectedHeader(token);
+  const alg = protectedHeader.alg;
+  const kid = protectedHeader.kid as string | undefined;
+
+  if (!alg || alg !== "RS256" || !kid) {
+    throw new Error("JWT no coincide con el formato esperado");
+  }
+
+  const res = await fetch(PUBLIC_KEYS_URL, { method: "GET" });
+  if (!res.ok) {
+    throw new Error("No se pudieron obtener public keys");
+  }
+  const publicKeys = (await res.json()) as Record<string, string>;
+
+  const x509cert = publicKeys[kid];
+  if (!x509cert) {
+    throw new Error("No existe public key para el kid del token");
+  }
+
+  const publicKey = await importX509(x509cert, "RS256");
+
+  // Claims equivalentes a ID token:
+  // - issuer: https://securetoken.google.com/<projectId>
+  // - audience: <projectId>
+  await jwtVerify(token, publicKey, {
+    issuer: `https://securetoken.google.com/${projectId}`,
     audience: projectId,
   });
 }

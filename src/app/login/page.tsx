@@ -1,25 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signInWithEmail, signInWithGoogle, loading: authLoading } = useAuth();
+  const {
+    signInWithEmail,
+    signInWithGoogle,
+    loading: authLoading,
+    user,
+  } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  useEffect(() => {
+    console.log("[login] mounted", {
+      authLoading,
+      hasUser: Boolean(user),
+    });
+  }, [authLoading, user]);
+
   async function handleGoogle() {
+    console.log("[login] google start");
     setError(null);
     setPending(true);
     try {
       await signInWithGoogle();
+      console.log("[login] google auth OK -> redirect /", {
+        hasUserAfter: Boolean(user),
+      });
       router.push("/");
       router.refresh();
+      console.log("[login] redirect triggered (router.push + refresh)");
     } catch (e) {
+      console.error("[login] google auth FAILED", e);
       setError(e instanceof Error ? e.message : "Error al iniciar con Google");
     } finally {
       setPending(false);
@@ -27,14 +45,20 @@ export default function LoginPage() {
   }
 
   async function handleEmailSubmit(ev: React.FormEvent) {
+    console.log("[login] email/password start");
     ev.preventDefault();
     setError(null);
     setPending(true);
     try {
       await signInWithEmail(email.trim(), password);
+      console.log("[login] email auth OK -> redirect /", {
+        email: email.trim(),
+      });
       router.push("/");
       router.refresh();
+      console.log("[login] redirect triggered (router.push + refresh)");
     } catch (e) {
+      console.error("[login] email auth FAILED", e);
       setError(e instanceof Error ? e.message : "Credenciales inválidas");
     } finally {
       setPending(false);
