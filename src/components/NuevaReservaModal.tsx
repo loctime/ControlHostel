@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { addDoc, Timestamp } from "firebase/firestore";
 import type { Cama, Reserva, ReservaEstado } from "@/lib/db";
 import { reservasCollection } from "@/lib/db";
@@ -150,6 +150,8 @@ export function NuevaReservaModal({
   espacioNameByKey,
   reservas,
   defaultCheckin,
+  initialBedKey,
+  lockBed,
 }: {
   open: boolean;
   onClose: () => void;
@@ -157,6 +159,8 @@ export function NuevaReservaModal({
   espacioNameByKey: Map<EspacioKey, { plantaName: string; espacioName: string }>;
   reservas: ReservaNode[];
   defaultCheckin?: Date;
+  initialBedKey?: CamaKey;
+  lockBed?: boolean;
 }) {
   const { hostelId } = useHostel();
   const [busy, setBusy] = useState(false);
@@ -244,6 +248,22 @@ export function NuevaReservaModal({
     return out;
   }, [activeStatuses, camasByEspacio, checkinDate, checkoutDate, espacioNameByKey, reservas]);
 
+  useEffect(() => {
+    if (!open) return;
+    // Al abrir, si viene una cama preseleccionada, setearla.
+    if (initialBedKey) {
+      setBedKey(initialBedKey);
+    }
+    // Si nos pasan un defaultCheckin, re-sincronizar fechas al abrir.
+    if (defaultCheckin) {
+      setCheckin(toYmd(defaultCheckin));
+      const d = new Date(defaultCheckin);
+      d.setDate(d.getDate() + 1);
+      setCheckout(toYmd(d));
+    }
+    setError(null);
+  }, [defaultCheckin, initialBedKey, open]);
+
   const nights = useMemo(() => {
     if (!checkinDate || !checkoutDate) return 0;
     if (checkoutDate <= checkinDate) return 0;
@@ -314,7 +334,14 @@ export function NuevaReservaModal({
       onClose();
       resetAll();
     } catch (e: unknown) {
-      setError(errorMessage(e, "Error creando reserva"));
+      const code = typeof e === "object" && e && "code" in e ? String((e as { code?: unknown }).code) : "";
+      if (code.includes("permission-denied")) {
+        setError(
+          "Permisos insuficientes (Firestore).\n\nVerificá que exista `usuarios/{uid}` con `hostelId` asignado y que tus reglas de Firestore estén publicadas.\nSi acabás de cambiar `firestore.rules`, ejecutá el deploy de reglas.",
+        );
+      } else {
+        setError(errorMessage(e, "Error creando reserva"));
+      }
     } finally {
       setBusy(false);
     }
@@ -349,7 +376,7 @@ export function NuevaReservaModal({
                   value={checkin}
                   onChange={(e) => {
                     setCheckin(e.target.value);
-                    setBedKey("");
+                    if (!lockBed) setBedKey("");
                     setError(null);
                   }}
                 />
@@ -363,7 +390,7 @@ export function NuevaReservaModal({
                   value={checkout}
                   onChange={(e) => {
                     setCheckout(e.target.value);
-                    setBedKey("");
+                    if (!lockBed) setBedKey("");
                     setError(null);
                   }}
                 />
@@ -374,7 +401,11 @@ export function NuevaReservaModal({
           <label className="block">
             <div className="text-xs font-medium text-[var(--text-secondary)]">Cama disponible</div>
             <div className="mt-1">
-              <Select value={bedKey} onChange={(e) => setBedKey(e.target.value as CamaKey)}>
+              <Select
+                value={bedKey}
+                onChange={(e) => setBedKey(e.target.value as CamaKey)}
+                disabled={!!lockBed}
+              >
                 <option value="">
                   {checkoutDate && checkinDate && checkoutDate > checkinDate
                     ? availableBeds.length === 0

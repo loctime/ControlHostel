@@ -6,18 +6,41 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Por ahora, el usuario siempre trabaja sobre el hostel fijo "demo".
-    match /hostels/{hostelId} {
-      function isDemoHostel() {
-        return hostelId == "demo";
-      }
+    // IMPORTANTE: si usuarios/{uid} no existe, NO acceder a .data (falla la regla → permission-denied).
+    function userHostelId() {
+      let d = get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+      return isSignedIn() && d.exists ? d.data.hostelId : null;
+    }
 
-      // Documento del hostel
-      allow read, write: if isSignedIn() && isDemoHostel();
+
+    function hasNoHostelAssigned() {
+      return isSignedIn() && userHostelId() == null;
+    }
+
+    function isUsersHostel(hostelId) {
+      return isSignedIn() && userHostelId() == hostelId;
+    }
+
+    // Documento del usuario: usuarios/{uid}
+    match /usuarios/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      // Setup inicial: el usuario se asigna su hostelId (y puede actualizarlo si hace falta).
+      allow create, update: if isSignedIn() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    // Hostels y subcolecciones
+    match /hostels/{hostelId} {
+      // Permitir crear un hostel solo si el usuario todavía no tiene uno asignado.
+      // (Se usa en /setup con addDoc(hostelsCollection()).)
+      allow create: if isSignedIn() && hasNoHostelAssigned();
+
+      // Lectura/escritura solo dentro del hostel asignado al usuario.
+      allow read, update, delete: if isUsersHostel(hostelId);
 
       // Subcolecciones del hostel (cualquier profundidad)
       match /{document=**} {
-        allow read, write: if isSignedIn() && isDemoHostel();
+        allow read, write: if isUsersHostel(hostelId);
       }
     }
   }

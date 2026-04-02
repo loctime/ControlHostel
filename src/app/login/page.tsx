@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { auth } from "@/lib/firebase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,8 +31,9 @@ export default function LoginPage() {
     setPending(true);
     try {
       await signInWithGoogle();
+      // `user` de useAuth sigue siendo el valor del render anterior (closure); el estado real está en Firebase Auth.
       console.log("[login] google auth OK -> redirect /", {
-        hasUserAfter: Boolean(user),
+        currentUserUid: auth.currentUser?.uid ?? null,
       });
       router.push("/");
       router.refresh();
