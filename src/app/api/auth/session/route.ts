@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getFirebaseAdminApp } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/session-cookie";
@@ -20,16 +19,15 @@ export async function POST(request: Request) {
       .auth()
       .createSessionCookie(idToken, { expiresIn: SESSION_MAX_AGE_MS });
 
-    const jar = await cookies();
-    jar.set(SESSION_COOKIE_NAME, sessionCookie, {
+    const res = NextResponse.json({ ok: true });
+    res.cookies.set(SESSION_COOKIE_NAME, sessionCookie, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: Math.floor(SESSION_MAX_AGE_MS / 1000),
     });
-
-    return NextResponse.json({ ok: true });
+    return res;
   } catch (e) {
     const message = e instanceof Error ? e.message : "Error creando sesión";
     return NextResponse.json({ error: message }, { status: 401 });
@@ -38,15 +36,15 @@ export async function POST(request: Request) {
 
 export async function DELETE() {
   try {
-    const jar = await cookies();
-    jar.set(SESSION_COOKIE_NAME, "", {
+    const res = NextResponse.json({ ok: true });
+    res.cookies.set(SESSION_COOKIE_NAME, "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: 0,
     });
-    return NextResponse.json({ ok: true });
+    return res;
   } catch {
     return NextResponse.json({ error: "No se pudo cerrar sesión" }, { status: 500 });
   }

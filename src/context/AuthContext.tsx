@@ -76,12 +76,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const signInWithEmail = useCallback(async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
-  }, []);
+  const signInWithEmail = useCallback(
+    async (email: string, password: string) => {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      // Clave: esperamos a que el servidor cree la cookie antes de resolver,
+      // para que el middleware no nos redirija de vuelta a `/login`.
+      const idToken = await cred.user.getIdToken();
+      await postSessionCookie(idToken);
+      setUser(cred.user);
+    },
+    [],
+  );
 
   const signInWithGoogle = useCallback(async () => {
-    await signInWithPopup(auth, googleProvider);
+    const cred = await signInWithPopup(auth, googleProvider);
+    // Ver comentario en `signInWithEmail`.
+    const idToken = await cred.user.getIdToken();
+    await postSessionCookie(idToken);
+    setUser(cred.user);
   }, []);
 
   const logout = useCallback(async () => {
