@@ -21,6 +21,7 @@ import {
   type EspacioKey as ModalEspacioKey,
   type ReservaNode as ModalReservaNode,
 } from "@/components/NuevaReservaModal";
+import { useHostel } from "@/context/HostelContext";
 
 type Id = string;
 type PlantaNode = { id: Id; data: Planta };
@@ -167,7 +168,8 @@ function DangerButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
 }
 
 export default function ReservasPage() {
-  const hostelId = "demo";
+  const { hostelId } = useHostel();
+  if (!hostelId) return null;
 
   const [plantas, setPlantas] = useState<PlantaNode[]>([]);
   const [espaciosByPlanta, setEspaciosByPlanta] = useState<Record<Id, EspacioNode[]>>({});
@@ -410,6 +412,7 @@ export default function ReservasPage() {
   }
 
   async function setEstado(reservaId: Id, next: ReservaEstado) {
+    if (!hostelId) return;
     setBusy(true);
     setError(null);
     try {
@@ -789,7 +792,6 @@ export default function ReservasPage() {
       <NuevaReservaModal
         open={newOpen}
         onClose={() => setNewOpen(false)}
-        hostelId={hostelId}
         camasByEspacio={camasByEspacio as unknown as Record<ModalEspacioKey, ModalCamaNode[]>}
         espacioNameByKey={espacioNameByKey as unknown as Map<ModalEspacioKey, { plantaName: string; espacioName: string }>}
         reservas={reservas as unknown as ModalReservaNode[]}

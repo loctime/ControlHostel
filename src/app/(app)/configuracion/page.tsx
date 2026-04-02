@@ -26,6 +26,7 @@ import {
   plantaRef,
   plantasCollection,
 } from "@/lib/db";
+import { useHostel } from "@/context/HostelContext";
 
 type Id = string;
 
@@ -189,7 +190,8 @@ function DangerButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
 }
 
 export default function ConfiguracionPage() {
-  const hostelId = "demo";
+  const { hostelId } = useHostel();
+  if (!hostelId) return null;
 
   const [hostel, setHostel] = useState<Hostel | null>(null);
   const [plantas, setPlantas] = useState<PlantaNode[]>([]);

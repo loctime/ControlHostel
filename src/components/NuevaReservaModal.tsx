@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { addDoc, Timestamp } from "firebase/firestore";
 import type { Cama, Reserva, ReservaEstado } from "@/lib/db";
 import { reservasCollection } from "@/lib/db";
+import { useHostel } from "@/context/HostelContext";
 
 type Id = string;
 export type EspacioKey = `${Id}/${Id}`; // plantaId/espacioId
@@ -145,7 +146,6 @@ function Modal({
 export function NuevaReservaModal({
   open,
   onClose,
-  hostelId,
   camasByEspacio,
   espacioNameByKey,
   reservas,
@@ -153,12 +153,12 @@ export function NuevaReservaModal({
 }: {
   open: boolean;
   onClose: () => void;
-  hostelId: string;
   camasByEspacio: Record<EspacioKey, CamaNode[]>;
   espacioNameByKey: Map<EspacioKey, { plantaName: string; espacioName: string }>;
   reservas: ReservaNode[];
   defaultCheckin?: Date;
 }) {
+  const { hostelId } = useHostel();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -269,6 +269,10 @@ export function NuevaReservaModal({
   }
 
   async function onCreate() {
+    if (!hostelId) {
+      setError("No tenés un hostel asignado. Completá el setup inicial.");
+      return;
+    }
     if (!checkinDate || !checkoutDate) {
       setError("Completá las fechas.");
       return;

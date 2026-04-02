@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useHostel } from "@/context/HostelContext";
 import { useTheme } from "@/context/ThemeContext";
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -13,7 +15,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { logout, loading } = useAuth();
+  const { hostelId, loading: hostelLoading } = useHostel();
   const { mode, toggleMode } = useTheme();
+
+  useEffect(() => {
+    if (hostelLoading) return;
+    if (pathname === "/setup") return;
+    if (!hostelId) {
+      router.push("/setup");
+      router.refresh();
+    }
+  }, [hostelId, hostelLoading, pathname, router]);
 
   async function handleLogout() {
     await logout();
@@ -21,12 +33,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     router.refresh();
   }
 
+  const hideNav = pathname === "/setup";
+
   const linkBase =
     "flex items-center justify-start rounded-lg px-3 py-2 text-sm transition-colors border border-transparent";
   const linkActive =
     "bg-[var(--bg-accent)] text-[var(--text-button)] border-[var(--border-primary)] hover:opacity-90";
   const linkInactive =
     "text-[var(--text-secondary)] hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]";
+
+  if (hostelLoading) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)]">
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="flex items-center gap-3 rounded-2xl border border-[var(--border-secondary)] bg-[var(--bg-component)] px-4 py-3 shadow-sm">
+            <span
+              className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--border-secondary)]"
+              style={{ borderTopColor: "var(--bg-accent)" }}
+            />
+            <span className="text-sm text-[var(--text-secondary)]">Cargando hostel…</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (hideNav) {
+    return <div className="min-h-screen bg-[var(--bg-page)] p-6 text-[var(--text-primary)]">{children}</div>;
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)]">

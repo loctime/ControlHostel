@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
+import { HostelProvider } from "@/context/HostelContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import "./globals.css";
 
@@ -31,7 +32,9 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col">
         <ThemeProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <HostelProvider>{children}</HostelProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

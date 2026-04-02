@@ -25,6 +25,7 @@ import {
   reservaRef,
   reservasCollection,
 } from "@/lib/db";
+import { useHostel } from "@/context/HostelContext";
 
 type Id = string;
 type PlantaNode = { id: Id; data: Planta };
@@ -267,7 +268,8 @@ function reservaBadgeColors(estado: ReservaEstado): { bg: string; fg: string } {
 }
 
 export default function CalendarioPage() {
-  const hostelId = "demo";
+  const { hostelId } = useHostel();
+  if (!hostelId) return null;
 
   const [plantas, setPlantas] = useState<PlantaNode[]>([]);
   const [espaciosByPlanta, setEspaciosByPlanta] = useState<Record<Id, EspacioNode[]>>({});
@@ -597,6 +599,7 @@ export default function CalendarioPage() {
   }, [camasByEspacio, espacioNameByKey, reservas, selectedDate, selectedSpace]);
 
   async function setReservaEstado(reservaId: Id, next: ReservaEstado) {
+    if (!hostelId) return;
     setBusy(true);
     setError(null);
     try {
@@ -609,6 +612,7 @@ export default function CalendarioPage() {
   }
 
   async function onBloquearFechas() {
+    if (!hostelId) return;
     if (!selectedSpace) return;
     const desde = parseYmd(blockDesde);
     const hasta = parseYmd(blockHasta);

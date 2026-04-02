@@ -16,6 +16,7 @@ import {
   type EspacioKey as ModalEspacioKey,
   type ReservaNode as ModalReservaNode,
 } from "@/components/NuevaReservaModal";
+import { useHostel } from "@/context/HostelContext";
 
 type Id = string;
 type PlantaNode = { id: Id; data: Planta };
@@ -98,7 +99,9 @@ const RESERVA_ACTIVA: ReadonlySet<ReservaEstado> = new Set([
 ]);
 
 export default function PanelPage() {
-  const hostelId = "demo";
+  const { hostelId, loading: hostelLoading } = useHostel();
+  if (hostelLoading) return null;
+  if (!hostelId) return null;
   const today = useMemo(() => startOfDay(new Date()), []);
   const fecha = useMemo(() => {
     return new Intl.DateTimeFormat("es-AR", {
@@ -354,6 +357,7 @@ export default function PanelPage() {
   }, [reservas, today]);
 
   async function setEstado(reservaId: Id, next: ReservaEstado) {
+    if (!hostelId) return;
     setBusy(true);
     setError(null);
     try {
@@ -510,7 +514,6 @@ export default function PanelPage() {
       <NuevaReservaModal
         open={newOpen}
         onClose={() => setNewOpen(false)}
-        hostelId={hostelId}
         camasByEspacio={camasByEspacio as unknown as Record<ModalEspacioKey, ModalCamaNode[]>}
         espacioNameByKey={espacioNameByKey as unknown as Map<ModalEspacioKey, { plantaName: string; espacioName: string }>}
         reservas={reservas as unknown as ModalReservaNode[]}
