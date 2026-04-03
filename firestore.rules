@@ -6,12 +6,19 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // hostelId efectivo: sin doc, sin campo, null o string vacío => "sin hostel" (permitir /setup).
     // IMPORTANTE: si usuarios/{uid} no existe, NO acceder a .data (falla la regla → permission-denied).
-    function userHostelId() {
+    function userHostelIdFromUsuarioDoc() {
       let d = get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
-      return isSignedIn() && d.exists ? d.data.hostelId : null;
+      return !d.exists ? null
+        : d.data.hostelId == null ? null
+        : (d.data.hostelId is string && d.data.hostelId.size() == 0) ? null
+        : d.data.hostelId;
     }
 
+    function userHostelId() {
+      return isSignedIn() ? userHostelIdFromUsuarioDoc() : null;
+    }
 
     function hasNoHostelAssigned() {
       return isSignedIn() && userHostelId() == null;
