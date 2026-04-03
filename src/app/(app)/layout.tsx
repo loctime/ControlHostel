@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { CreateHostelOnboarding } from "@/components/CreateHostelOnboarding";
 import { useAuth } from "@/context/AuthContext";
 import { useHostel } from "@/context/HostelContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -14,18 +14,11 @@ function cx(...classes: Array<string | false | null | undefined>) {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout, loading } = useAuth();
+  const { user, logout, loading } = useAuth();
   const { hostelId, loading: hostelLoading } = useHostel();
   const { mode, toggleMode } = useTheme();
 
-  useEffect(() => {
-    if (hostelLoading) return;
-    if (pathname === "/setup") return;
-    if (!hostelId) {
-      router.push("/setup");
-      router.refresh();
-    }
-  }, [hostelId, hostelLoading, pathname, router]);
+  const needsHostelOnboarding = Boolean(user && !hostelId);
 
   async function handleLogout() {
     await logout();
@@ -220,7 +213,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="ml-[200px] min-h-screen p-6">{children}</main>
+      <main className="ml-[200px] min-h-screen p-6">
+        {needsHostelOnboarding ? <CreateHostelOnboarding /> : children}
+      </main>
     </div>
   );
 }
