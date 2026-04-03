@@ -7,6 +7,7 @@ service cloud.firestore {
     }
 
     // hostelId efectivo: sin doc, sin campo, null o string vacío => "sin hostel" (permitir /setup).
+    // El cliente debe guardar null (no ""): en reglas Firestore, "" == null es falso y rompe hasNoHostelAssigned.
     // IMPORTANTE: si usuarios/{uid} no existe, NO acceder a .data (falla la regla → permission-denied).
     function userHostelIdFromUsuarioDoc() {
       let d = get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
@@ -16,12 +17,18 @@ service cloud.firestore {
         : d.data.hostelId;
     }
 
-    function userHostelId() {
-      return isSignedIn() ? userHostelIdFromUsuarioDoc() : null;
+    // Estado de usuarios/{uid} tras aplicar la petición (batch/transacción o escritura simple).
+    // Necesario para allow create en hostels: en un batch, get() no ve el setDoc de usuario todavía.
+    function userHostelIdFromUsuarioAfterRequest() {
+      let d = getAfter(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+      return !d.exists ? null
+        : d.data.hostelId == null ? null
+        : (d.data.hostelId is string && d.data.hostelId.size() == 0) ? null
+        : d.data.hostelId;
     }
 
-    function hasNoHostelAssigned() {
-      return isSignedIn() && userHostelId() == null;
+    function userHostelId() {
+      return isSignedIn() ? userHostelIdFromUsuarioDoc() : null;
     }
 
     function isUsersHostel(hostelId) {
@@ -38,9 +45,8 @@ service cloud.firestore {
 
     // Hostels y subcolecciones
     match /hostels/{hostelId} {
-      // Permitir crear un hostel solo si el usuario todavía no tiene uno asignado.
-      // (Se usa en /setup con addDoc(hostelsCollection()).)
-      allow create: if isSignedIn() && hasNoHostelAssigned();
+      // Crear hostel: sin hostel asignado tras esta petición (getAfter → coherente con writeBatch + set usuario).
+      allow create: if isSignedIn() && userHostelIdFromUsuarioAfterRequest() == null;
 
       // Lectura/escritura solo dentro del hostel asignado al usuario.
       allow read, update, delete: if isUsersHostel(hostelId);

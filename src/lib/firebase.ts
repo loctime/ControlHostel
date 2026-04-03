@@ -1,6 +1,24 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, type Firestore } from "firebase/firestore";
+
+/** Evita doble init en HMR de Next.js (misma pestaña). */
+const firestoreSingleton = globalThis as unknown as { __controlhostelDb?: Firestore };
+
+function getOrCreateFirestore(app: FirebaseApp): Firestore {
+  if (firestoreSingleton.__controlhostelDb) {
+    return firestoreSingleton.__controlhostelDb;
+  }
+  try {
+    firestoreSingleton.__controlhostelDb = initializeFirestore(app, {
+      // WebChannel suele romperse con bloqueadores (p. ej. ERR_BLOCKED_BY_CLIENT) y dispara bugs del SDK (ca9).
+      experimentalForceLongPolling: true,
+    });
+  } catch {
+    firestoreSingleton.__controlhostelDb = getFirestore(app);
+  }
+  return firestoreSingleton.__controlhostelDb;
+}
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -23,4 +41,4 @@ function getFirebaseApp(): FirebaseApp {
 
 export const app: FirebaseApp = getFirebaseApp();
 export const auth: Auth = getAuth(app);
-export const db: Firestore = getFirestore(app);
+export const db: Firestore = getOrCreateFirestore(app);

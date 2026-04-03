@@ -1,9 +1,9 @@
 import { collection, doc, type CollectionReference, type DocumentReference } from "firebase/firestore";
 import { db } from "./firebase";
 
-/** usuarios/{uid} */
+/** usuarios/{uid} — `hostelId: null` = sin hostel asignado (setup). En Firestore usá null, no "". */
 export type Usuario = {
-  hostelId: string;
+  hostelId: string | null;
 };
 
 export function usuariosCollection(): CollectionReference<Usuario, Usuario> {

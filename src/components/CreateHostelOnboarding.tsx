@@ -1,12 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { addDoc, setDoc } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
-import type { Hostel } from "@/lib/db";
-import { hostelsCollection } from "@/lib/db";
-import type { Usuario } from "@/lib/usuario";
-import { usuarioRef } from "@/lib/usuario";
+import { useHostel } from "@/context/HostelContext";
 
 const LOG = "[CreateHostel]";
 
@@ -66,6 +62,7 @@ export function CreateHostelOnboarding({
   centeredInViewport = true,
 }: CreateHostelOnboardingProps) {
   const { user } = useAuth();
+  const { refreshUsuario } = useHostel();
   const [nombre, setNombre] = useState("");
   const [direccion, setDireccion] = useState("");
   const [busy, setBusy] = useState(false);
@@ -85,21 +82,26 @@ export function CreateHostelOnboarding({
     setError(null);
     console.log(`${LOG} inicio`, { uid: user.uid });
     try {
-      console.log(`${LOG} paso 1/3 setDoc usuarios/{uid} → hostelId ""`);
-      await setDoc(usuarioRef(user.uid), { hostelId: "" } satisfies Usuario);
-      console.log(`${LOG} paso 1 OK`);
+      console.log(`${LOG} POST /api/hostels/create (Admin SDK, sin depender de reglas cliente)`);
+      const res = await fetch("/api/hostels/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          direccion: direccion.trim(),
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        hostelId?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error ?? `Error del servidor (${res.status})`);
+      }
+      console.log(`${LOG} OK`, { hostelId: data.hostelId });
 
-      console.log(`${LOG} paso 2/3 addDoc hostels`);
-      const hostelDoc = await addDoc(hostelsCollection(), {
-        nombre: nombre.trim(),
-        direccion: direccion.trim(),
-      } satisfies Hostel);
-      console.log(`${LOG} paso 2 OK`, { hostelId: hostelDoc.id });
-
-      console.log(`${LOG} paso 3/3 setDoc usuarios/{uid} → hostelId asignado`);
-      await setDoc(usuarioRef(user.uid), { hostelId: hostelDoc.id } satisfies Usuario);
-      console.log(`${LOG} paso 3 OK — flujo completo`);
-
+      await refreshUsuario();
       onComplete?.();
     } catch (e: unknown) {
       logError("crear hostel", e);
