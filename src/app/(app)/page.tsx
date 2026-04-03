@@ -17,6 +17,7 @@ import {
   type ReservaNode as ModalReservaNode,
 } from "@/components/NuevaReservaModal";
 import { useHostel } from "@/context/HostelContext";
+import { logFirestoreListenError, userFacingFirestoreError } from "@/lib/firestore-ui";
 
 type Id = string;
 type PlantaNode = { id: Id; data: Planta };
@@ -29,12 +30,6 @@ type CamaKey = `${Id}/${Id}/${Id}`; // plantaId/espacioId/camaId
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
-}
-
-function errorMessage(e: unknown, fallback: string) {
-  if (e instanceof Error) return e.message || fallback;
-  if (typeof e === "string") return e || fallback;
-  return fallback;
 }
 
 function startOfDay(d: Date) {
@@ -200,19 +195,28 @@ export default function PanelPage() {
                     });
                     setCamasByEspacio((prev) => ({ ...prev, [key]: nextCamas }));
                   },
-                  (e) => setError(errorMessage(e, "Error leyendo camas")),
+                  (e) => {
+                    logFirestoreListenError("panel", "camas", e);
+                    setError(userFacingFirestoreError(e, "Camas"));
+                  },
                 );
 
                 camasMap.set(key, unsubCamas);
               }
             },
-            (e) => setError(errorMessage(e, "Error leyendo espacios")),
+            (e) => {
+              logFirestoreListenError("panel", "espacios", e);
+              setError(userFacingFirestoreError(e, "Espacios"));
+            },
           );
 
           espaciosMap.set(plantaId, unsubEspacios);
         }
       },
-      (e) => setError(errorMessage(e, "Error leyendo plantas")),
+      (e) => {
+        logFirestoreListenError("panel", "plantas", e);
+        setError(userFacingFirestoreError(e, "Plantas"));
+      },
     );
 
     const qReservas = query(reservasCollection(hostelId), orderBy("checkin", "desc"));
@@ -222,7 +226,10 @@ export default function PanelPage() {
         setError(null);
         setReservas(snap.docs.map((d) => ({ id: d.id, data: d.data() })));
       },
-      (e) => setError(errorMessage(e, "Error leyendo reservas")),
+      (e) => {
+        logFirestoreListenError("panel", "reservas", e);
+        setError(userFacingFirestoreError(e, "Reservas"));
+      },
     );
 
     return () => {
@@ -363,7 +370,7 @@ export default function PanelPage() {
     try {
       await updateDoc(reservaRef(hostelId, reservaId), { estado: next } satisfies Partial<Reserva>);
     } catch (e: unknown) {
-      setError(errorMessage(e, "Error actualizando reserva"));
+      setError(userFacingFirestoreError(e, "Actualizar reserva"));
     } finally {
       setBusy(false);
     }
