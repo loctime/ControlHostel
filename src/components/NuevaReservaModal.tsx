@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { addDoc, Timestamp } from "firebase/firestore";
 import type { Cama, Reserva, ReservaEstado } from "@/lib/db";
-import { reservasCollection } from "@/lib/db";
 import { useHostel } from "@/context/HostelContext";
 
 type Id = string;
@@ -315,33 +313,33 @@ export function NuevaReservaModal({
     setBusy(true);
     setError(null);
     try {
-      await addDoc(reservasCollection(hostelId), {
-        plantaId,
-        espacioId,
-        camaId,
-        checkin: Timestamp.fromDate(checkinDate),
-        checkout: Timestamp.fromDate(checkoutDate),
-        estado,
-        huesped: {
-          nombre: nombre.trim(),
-          telefono: telefono.trim(),
-          email: email.trim(),
-          dni: dni.trim(),
-        },
-        notas: notas.trim(),
-      } satisfies Reserva);
+      const res = await fetch("/api/hostels/reservas/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          plantaId,
+          espacioId,
+          camaId,
+          checkinMillis: checkinDate.getTime(),
+          checkoutMillis: checkoutDate.getTime(),
+          estado,
+          huesped: {
+            nombre: nombre.trim(),
+            telefono: telefono.trim(),
+            email: email.trim(),
+            dni: dni.trim(),
+          },
+          notas: notas.trim(),
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(data.error ?? `Error del servidor (${res.status})`);
 
       onClose();
       resetAll();
     } catch (e: unknown) {
-      const code = typeof e === "object" && e && "code" in e ? String((e as { code?: unknown }).code) : "";
-      if (code.includes("permission-denied")) {
-        setError(
-          "Permisos insuficientes (Firestore).\n\nVerificá que exista `usuarios/{uid}` con `hostelId` asignado y que tus reglas de Firestore estén publicadas.\nSi acabás de cambiar `firestore.rules`, ejecutá el deploy de reglas.",
-        );
-      } else {
-        setError(errorMessage(e, "Error creando reserva"));
-      }
+      setError(errorMessage(e, "Error creando reserva"));
     } finally {
       setBusy(false);
     }
