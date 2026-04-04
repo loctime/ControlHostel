@@ -39,13 +39,20 @@ type ApiJson = {
   }>;
 };
 
-export async function fetchHostelSnapshot(): Promise<HostelSnapshot> {
-  const res = await fetch("/api/hostels/snapshot", { credentials: "same-origin" });
-  const json = (await res.json()) as ApiJson;
+/** Último snapshot por sesión: evita pantalla en blanco al cambiar de ruta y deduplica fetches. */
+let memoryCache: HostelSnapshot | null = null;
+let inflightSnapshot: Promise<HostelSnapshot> | null = null;
 
-  if (!res.ok) {
-    throw new Error(json.error ?? `Error del servidor (${res.status})`);
-  }
+export function readHostelSnapshotCache(hostelId: string | null | undefined): HostelSnapshot | null {
+  if (!hostelId || !memoryCache || memoryCache.hostelId !== hostelId) return null;
+  return memoryCache;
+}
+
+function putHostelSnapshotCache(data: HostelSnapshot) {
+  memoryCache = data;
+}
+
+function parseSnapshotJson(json: ApiJson): HostelSnapshot {
   if (
     !json.hostelId ||
     !json.plantas ||
@@ -92,6 +99,27 @@ export async function fetchHostelSnapshot(): Promise<HostelSnapshot> {
   };
 }
 
+export function fetchHostelSnapshot(): Promise<HostelSnapshot> {
+  if (inflightSnapshot) return inflightSnapshot;
+
+  inflightSnapshot = (async () => {
+    const res = await fetch("/api/hostels/snapshot", { credentials: "same-origin" });
+    const json = (await res.json()) as ApiJson;
+
+    if (!res.ok) {
+      throw new Error(json.error ?? `Error del servidor (${res.status})`);
+    }
+
+    const out = parseSnapshotJson(json);
+    putHostelSnapshotCache(out);
+    return out;
+  })().finally(() => {
+    inflightSnapshot = null;
+  });
+
+  return inflightSnapshot;
+}
+
 export type UseHostelSnapshotOptions = {
   /** `false` = solo carga inicial, al volver a la pestaña y `reload()` manual */
   pollMs?: number | false;
@@ -100,9 +128,14 @@ export type UseHostelSnapshotOptions = {
 export function useHostelSnapshot(options?: UseHostelSnapshotOptions) {
   const pollMs = options?.pollMs === false ? false : (options?.pollMs ?? 5000);
   const { hostelId, loading: hostelContextLoading } = useHostel();
-  const [snapshot, setSnapshot] = useState<HostelSnapshot | null>(null);
+
+  const [snapshot, setSnapshot] = useState<HostelSnapshot | null>(() =>
+    hostelId ? readHostelSnapshotCache(hostelId) : null,
+  );
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [awaitingFirstFetch, setAwaitingFirstFetch] = useState(
+    () => Boolean(hostelId && !readHostelSnapshotCache(hostelId)),
+  );
 
   const reload = useCallback(async () => {
     if (!hostelId) return;
@@ -121,9 +154,13 @@ export function useHostelSnapshot(options?: UseHostelSnapshotOptions) {
     if (!hostelId) {
       setSnapshot(null);
       setError(null);
-      setLoading(false);
+      setAwaitingFirstFetch(false);
       return;
     }
+
+    const cached = readHostelSnapshotCache(hostelId);
+    setSnapshot(cached);
+    setAwaitingFirstFetch(!cached);
 
     let cancelled = false;
 
@@ -139,11 +176,10 @@ export function useHostelSnapshot(options?: UseHostelSnapshotOptions) {
           setError(userFacingFirestoreError(e, "Datos del hostel"));
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setAwaitingFirstFetch(false);
       }
     }
 
-    setLoading(true);
     void tick();
 
     const intervalId =
@@ -171,8 +207,8 @@ export function useHostelSnapshot(options?: UseHostelSnapshotOptions) {
     reservas: snapshot?.reservas ?? [],
     bloqueos: snapshot?.bloqueos ?? [],
     loadError: error,
-    /** Primer fetch o contexto hostel cargando */
-    loading: hostelContextLoading || (loading && !snapshot),
+    /** Sin datos aún (ni caché) o contexto hostel cargando */
+    loading: hostelContextLoading || (awaitingFirstFetch && !snapshot),
     reload,
   };
 }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { updateDoc } from "firebase/firestore";
 import type { Cama, Espacio, Planta, Reserva, ReservaEstado } from "@/lib/db";
 import { reservaRef } from "@/lib/db";
-import { fetchHostelSnapshot } from "@/lib/hostel-snapshot-client";
+import { fetchHostelSnapshot, readHostelSnapshotCache } from "@/lib/hostel-snapshot-client";
 import {
   NuevaReservaModal,
   type CamaNode as ModalCamaNode,
@@ -99,8 +99,7 @@ type PanelSnapshot = {
 
 export default function PanelPage() {
   const { hostelId, loading: hostelLoading } = useHostel();
-  if (hostelLoading) return null;
-  if (!hostelId) return null;
+
   const today = useMemo(() => startOfDay(new Date()), []);
   const fecha = useMemo(() => {
     return new Intl.DateTimeFormat("es-AR", {
@@ -111,10 +110,22 @@ export default function PanelPage() {
     }).format(new Date());
   }, []);
 
-  const [plantas, setPlantas] = useState<PlantaNode[]>([]);
-  const [espaciosByPlanta, setEspaciosByPlanta] = useState<Record<Id, EspacioNode[]>>({});
-  const [camasByEspacio, setCamasByEspacio] = useState<Record<EspacioKey, CamaNode[]>>({});
-  const [reservas, setReservas] = useState<ReservaNode[]>([]);
+  const [plantas, setPlantas] = useState<PlantaNode[]>(() => {
+    const c = hostelId ? readHostelSnapshotCache(hostelId) : null;
+    return c?.plantas ?? [];
+  });
+  const [espaciosByPlanta, setEspaciosByPlanta] = useState<Record<Id, EspacioNode[]>>(() => {
+    const c = hostelId ? readHostelSnapshotCache(hostelId) : null;
+    return c?.espaciosByPlanta ?? {};
+  });
+  const [camasByEspacio, setCamasByEspacio] = useState<Record<EspacioKey, CamaNode[]>>(() => {
+    const c = hostelId ? readHostelSnapshotCache(hostelId) : null;
+    return (c?.camasByEspacio ?? {}) as Record<EspacioKey, CamaNode[]>;
+  });
+  const [reservas, setReservas] = useState<ReservaNode[]>(() => {
+    const c = hostelId ? readHostelSnapshotCache(hostelId) : null;
+    return c?.reservas ?? [];
+  });
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -307,6 +318,8 @@ export default function PanelPage() {
       setBusy(false);
     }
   }
+
+  if (hostelLoading || !hostelId) return null;
 
   return (
     <div className="space-y-6 text-[var(--text-primary)]" style={{ backgroundColor: "var(--bg-page)" }}>
