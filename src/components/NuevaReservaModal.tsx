@@ -246,6 +246,45 @@ export function NuevaReservaModal({
     return out;
   }, [activeStatuses, camasByEspacio, checkinDate, checkoutDate, espacioNameByKey, reservas]);
 
+  const bedSquareAvailableColor = "rgb(34, 197, 94)";
+
+  const lockedBedLabel = useMemo(() => {
+    if (!bedKey) return "";
+    const found = availableBeds.find((x) => x.key === bedKey);
+    if (found) return found.label;
+    const parts = bedKey.split("/");
+    if (parts.length !== 3) return bedKey;
+    const [plantaId, espacioId, camaId] = parts as [Id, Id, Id];
+    const espacioKey = `${plantaId}/${espacioId}` as EspacioKey;
+    const space = espacioNameByKey.get(espacioKey);
+    const camas = camasByEspacio[espacioKey] ?? [];
+    const cama = camas.find((c) => c.id === camaId);
+    const spaceLabel = space ? `${space.plantaName} · ${space.espacioName}` : espacioKey;
+    return `${spaceLabel} · #${cama?.data.nombre ?? camaId}`;
+  }, [availableBeds, bedKey, camasByEspacio, espacioNameByKey]);
+
+  type AvailableBedRow = (typeof availableBeds)[number];
+
+  const bedsGroupedByEspacio = useMemo(() => {
+    const map = new Map<EspacioKey, AvailableBedRow[]>();
+    for (const b of availableBeds) {
+      const k = `${b.plantaId}/${b.espacioId}` as EspacioKey;
+      const list = map.get(k) ?? [];
+      list.push(b);
+      map.set(k, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, c) => a.label.localeCompare(c.label));
+    }
+    return [...map.entries()].sort(([ka], [kb]) => {
+      const ma = espacioNameByKey.get(ka);
+      const mb = espacioNameByKey.get(kb);
+      const sa = ma ? `${ma.plantaName}\0${ma.espacioName}` : ka;
+      const sb = mb ? `${mb.plantaName}\0${mb.espacioName}` : kb;
+      return sa.localeCompare(sb);
+    });
+  }, [availableBeds, espacioNameByKey]);
+
   useEffect(() => {
     if (!open) return;
     // Al abrir, si viene una cama preseleccionada, setearla.
@@ -396,32 +435,95 @@ export function NuevaReservaModal({
             </label>
           </div>
 
-          <label className="block">
+          <div className="block">
             <div className="text-xs font-medium text-[var(--text-secondary)]">Cama disponible</div>
             <div className="mt-1">
-              <Select
-                value={bedKey}
-                onChange={(e) => setBedKey(e.target.value as CamaKey)}
-                disabled={!!lockBed}
-              >
-                <option value="">
-                  {checkoutDate && checkinDate && checkoutDate > checkinDate
-                    ? availableBeds.length === 0
-                      ? "Sin camas disponibles"
-                      : `Seleccionar (${availableBeds.length} disponibles)`
-                    : "Seleccionar (primero elegí fechas válidas)"}
-                </option>
-                {availableBeds.map((b) => (
-                  <option key={b.key} value={b.key}>
-                    {b.label}
-                  </option>
-                ))}
-              </Select>
+              {lockBed && bedKey ? (
+                <div
+                  className="
+                    flex items-center gap-3 rounded-xl border border-[var(--border-secondary)]
+                    bg-[var(--bg-page)] p-3
+                  "
+                >
+                  <span
+                    className="h-9 w-9 shrink-0 rounded-lg border border-black/10"
+                    style={{ backgroundColor: bedSquareAvailableColor }}
+                    title={lockedBedLabel}
+                  />
+                  <div className="min-w-0 flex-1 text-sm text-[var(--text-primary)]">{lockedBedLabel}</div>
+                </div>
+              ) : !checkinDate || !checkoutDate || checkoutDate <= checkinDate ? (
+                <div className="rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] px-3 py-3 text-sm text-[var(--text-tertiary)]">
+                  Elegí fechas válidas para ver camas disponibles.
+                </div>
+              ) : availableBeds.length === 0 ? (
+                <div className="rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] px-3 py-3 text-sm text-[var(--text-tertiary)]">
+                  Sin camas disponibles para este rango.
+                </div>
+              ) : (
+                <>
+                  <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                    {bedsGroupedByEspacio.map(([espacioKey, beds]) => {
+                      const meta = espacioNameByKey.get(espacioKey);
+                      const espacioTitle =
+                        meta?.espacioName?.trim() ||
+                        (espacioKey.includes("/") ? espacioKey.split("/")[1] : espacioKey);
+                      const plantaTitle = meta?.plantaName?.trim() || "";
+                      return (
+                        <div
+                          key={espacioKey}
+                          className="rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] p-3"
+                        >
+                          <div className="text-sm font-semibold text-[var(--text-primary)]">
+                            {espacioTitle}
+                          </div>
+                          <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                            {plantaTitle || "Planta"}
+                            {" · "}
+                            {beds.length} cama{beds.length === 1 ? "" : "s"} disponible
+                            {beds.length === 1 ? "" : "s"}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {beds.map((b) => {
+                              const camasRow = camasByEspacio[espacioKey] ?? [];
+                              const camaNode = camasRow.find((c) => c.id === b.camaId);
+                              const selected = bedKey === b.key;
+                              return (
+                                <button
+                                  key={b.key}
+                                  type="button"
+                                  title={camaNode?.data.nombre || b.camaId}
+                                  className={cx(
+                                    "h-7 w-7 shrink-0 cursor-pointer rounded-full border border-black/10 transition-transform hover:scale-110",
+                                    selected &&
+                                      "outline outline-2 outline-offset-[2px] [outline-color:var(--text-primary)]",
+                                  )}
+                                  style={{ backgroundColor: "rgb(34, 197, 94)" }}
+                                  onClick={() => {
+                                    setBedKey(b.key);
+                                    setError(null);
+                                  }}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {bedKey ? (
+                    <div className="mt-2 text-xs text-[var(--text-secondary)]">
+                      Seleccionada:{" "}
+                      {availableBeds.find((b) => b.key === bedKey)?.label ?? bedKey}
+                    </div>
+                  ) : null}
+                </>
+              )}
             </div>
             <div className="mt-1 text-xs text-[var(--text-tertiary)]" style={{ opacity: 0.9 }}>
               Se muestran solo camas visibles (<code>activo</code>) sin reservas activas superpuestas.
             </div>
-          </label>
+          </div>
 
           <div className="flex items-center justify-between gap-3">
             <SecondaryButton
