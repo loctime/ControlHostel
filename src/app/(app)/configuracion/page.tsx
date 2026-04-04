@@ -1,14 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  addDoc,
-  deleteDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  updateDoc,
-} from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
+import { addDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import type {
   Cama,
   CamaEstado,
@@ -26,7 +19,7 @@ import {
   plantaRef,
   plantasCollection,
 } from "@/lib/db";
-import { useHostel } from "@/context/HostelContext";
+import { useHostelSnapshot } from "@/lib/hostel-snapshot-client";
 
 type Id = string;
 
@@ -190,13 +183,16 @@ function DangerButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
 }
 
 export default function ConfiguracionPage() {
-  const { hostelId } = useHostel();
-  if (!hostelId) return null;
-
-  const [hostel, setHostel] = useState<Hostel | null>(null);
-  const [plantas, setPlantas] = useState<PlantaNode[]>([]);
-  const [espaciosByPlanta, setEspaciosByPlanta] = useState<Record<Id, EspacioNode[]>>({});
-  const [camasByEspacio, setCamasByEspacio] = useState<Record<string, CamaNode[]>>({});
+  const {
+    hostelId,
+    hostel,
+    plantas,
+    espaciosByPlanta,
+    camasByEspacio,
+    loadError,
+    loading,
+    reload,
+  } = useHostelSnapshot({ pollMs: false });
 
   const [expandedPlantas, setExpandedPlantas] = useState<Record<Id, boolean>>({});
   const [expandedEspacios, setExpandedEspacios] = useState<Record<string, boolean>>({});
@@ -205,13 +201,7 @@ export default function ConfiguracionPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectionRef = useRef<Selection>(selection);
-  useEffect(() => {
-    selectionRef.current = selection;
-  }, [selection]);
-
-  const unsubEspaciosByPlanta = useRef(new Map<Id, () => void>());
-  const unsubCamasByEspacio = useRef(new Map<string, () => void>());
+  const syncData = () => void reload();
 
   const selectedPlantaId =
     selection.kind === "planta"
@@ -254,139 +244,22 @@ export default function ConfiguracionPage() {
   }, [camasByEspacio, selectedCamaId, selectedEspacioId, selectedPlantaId]);
 
   useEffect(() => {
-    const espaciosMap = unsubEspaciosByPlanta.current;
-    const camasMap = unsubCamasByEspacio.current;
-
-    const unsubHostel = onSnapshot(
-      hostelRef(hostelId),
-      (snap) => {
-        setError(null);
-        setHostel(snap.exists() ? snap.data() : null);
-      },
-      (e) => setError(errorMessage(e, "Error leyendo hostel")),
-    );
-
-    const qPlantas = query(plantasCollection(hostelId), orderBy("orden", "asc"));
-    const unsubPlantas = onSnapshot(
-      qPlantas,
-      (snap) => {
-        setError(null);
-        const next = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
-        setPlantas(next);
-
-        const plantaIds = new Set(next.map((p) => p.id));
-
-        // limpiar subscripciones de espacios de plantas eliminadas
-        for (const [plantaId, unsub] of espaciosMap.entries()) {
-          if (!plantaIds.has(plantaId)) {
-            unsub();
-            espaciosMap.delete(plantaId);
-            setEspaciosByPlanta((prev) => {
-              const copy = { ...prev };
-              delete copy[plantaId];
-              return copy;
-            });
-          }
-        }
-
-        // asegurar subscripciones de espacios por planta
-        for (const plantaId of plantaIds) {
-          if (espaciosMap.has(plantaId)) continue;
-
-          const qEspacios = query(
-            espaciosCollection(hostelId, plantaId),
-            orderBy("nombre", "asc"),
-          );
-          const unsubEspacios = onSnapshot(
-            qEspacios,
-            (snapEspacios) => {
-              setError(null);
-              const nextEspacios = snapEspacios.docs.map((d) => ({ id: d.id, data: d.data() }));
-              setEspaciosByPlanta((prev) => ({ ...prev, [plantaId]: nextEspacios }));
-
-              const existingKeys = new Set(
-                nextEspacios.map((e) => `${plantaId}/${e.id}`),
-              );
-
-              // limpiar subscripciones de camas de espacios eliminados (en esta planta)
-              for (const [key, unsubCamas] of camasMap.entries()) {
-                if (!key.startsWith(`${plantaId}/`)) continue;
-                if (!existingKeys.has(key)) {
-                  unsubCamas();
-                  camasMap.delete(key);
-                  setCamasByEspacio((prev) => {
-                    const copy = { ...prev };
-                    delete copy[key];
-                    return copy;
-                  });
-                }
-              }
-
-              // asegurar subscripciones de camas para cada espacio
-              for (const espacio of nextEspacios) {
-                const key = `${plantaId}/${espacio.id}`;
-                if (camasMap.has(key)) continue;
-
-                const qCamas = query(
-                  camasCollection(hostelId, plantaId, espacio.id),
-                  orderBy("nombre", "asc"),
-                );
-                const unsubCamas = onSnapshot(
-                  qCamas,
-                  (snapCamas) => {
-                    setError(null);
-                    const nextCamas = snapCamas.docs.map((d) => {
-                      const raw = d.data() as Cama & { activo?: boolean };
-                      return { id: d.id, data: raw };
-                    });
-                    setCamasByEspacio((prev) => ({ ...prev, [key]: nextCamas }));
-
-                    const currentSel = selectionRef.current;
-                    if (currentSel.kind === "cama") {
-                      if (currentSel.plantaId !== plantaId || currentSel.espacioId !== espacio.id) {
-                        return;
-                      }
-                      if (!nextCamas.some((c) => c.id === currentSel.camaId)) {
-                        setSelection({ kind: "hostel" });
-                      }
-                    }
-                  },
-                  (e) => setError(errorMessage(e, "Error leyendo camas")),
-                );
-
-                camasMap.set(key, unsubCamas);
-              }
-
-              const currentSel = selectionRef.current;
-              if (currentSel.kind === "espacio" && currentSel.plantaId === plantaId) {
-                if (!nextEspacios.some((e) => e.id === currentSel.espacioId)) {
-                  setSelection({ kind: "hostel" });
-                }
-              }
-            },
-            (e) => setError(errorMessage(e, "Error leyendo espacios")),
-          );
-
-          espaciosMap.set(plantaId, unsubEspacios);
-        }
-
-        const currentSel = selectionRef.current;
-        if (currentSel.kind === "planta") {
-          if (!next.some((p) => p.id === currentSel.plantaId)) setSelection({ kind: "hostel" });
-        }
-      },
-      (e) => setError(errorMessage(e, "Error leyendo plantas")),
-    );
-
-    return () => {
-      unsubHostel();
-      unsubPlantas();
-      for (const unsub of espaciosMap.values()) unsub();
-      for (const unsub of camasMap.values()) unsub();
-      espaciosMap.clear();
-      camasMap.clear();
-    };
-  }, [hostelId]);
+    setSelection((prev) => {
+      if (prev.kind === "planta") {
+        if (!plantas.some((p) => p.id === prev.plantaId)) return { kind: "hostel" };
+      }
+      if (prev.kind === "espacio") {
+        const esp = espaciosByPlanta[prev.plantaId] ?? [];
+        if (!esp.some((e) => e.id === prev.espacioId)) return { kind: "hostel" };
+      }
+      if (prev.kind === "cama") {
+        const key = `${prev.plantaId}/${prev.espacioId}`;
+        const camas = camasByEspacio[key] ?? [];
+        if (!camas.some((c) => c.id === prev.camaId)) return { kind: "hostel" };
+      }
+      return prev;
+    });
+  }, [plantas, espaciosByPlanta, camasByEspacio]);
 
   function togglePlanta(plantaId: Id) {
     setExpandedPlantas((prev) => ({ ...prev, [plantaId]: !prev[plantaId] }));
@@ -399,6 +272,8 @@ export default function ConfiguracionPage() {
 
   const treeHostelTitle = hostel?.nombre?.trim() ? hostel.nombre : "Hostel";
   const treeHostelSubtitle = hostel?.direccion?.trim() ? hostel.direccion : "Sin dirección";
+
+  if (loading || !hostelId) return null;
 
   return (
     <div className="text-[var(--text-primary)]" style={{ backgroundColor: "var(--bg-page)" }}>
@@ -649,12 +524,12 @@ export default function ConfiguracionPage() {
             </div>
           </div>
 
-          {error ? (
+          {loadError || error ? (
             <div
               className="mt-4 rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] p-3 text-sm"
               style={{ borderColor: "rgba(255, 99, 99, 0.45)" }}
             >
-              {error}
+              {loadError ?? error}
             </div>
           ) : null}
 
@@ -666,6 +541,7 @@ export default function ConfiguracionPage() {
                 busy={busy}
                 setBusy={setBusy}
                 setError={setError}
+                onDataSynced={syncData}
               />
             ) : null}
 
@@ -677,6 +553,7 @@ export default function ConfiguracionPage() {
                 setBusy={setBusy}
                 setError={setError}
                 onDeleted={() => setSelection({ kind: "hostel" })}
+                onDataSynced={syncData}
               />
             ) : null}
 
@@ -692,6 +569,7 @@ export default function ConfiguracionPage() {
                 setBusy={setBusy}
                 setError={setError}
                 onDeleted={() => setSelection({ kind: "hostel" })}
+                onDataSynced={syncData}
               />
             ) : null}
 
@@ -705,6 +583,7 @@ export default function ConfiguracionPage() {
                 setBusy={setBusy}
                 setError={setError}
                 onDeleted={() => setSelection({ kind: "hostel" })}
+                onDataSynced={syncData}
               />
             ) : null}
 
@@ -716,6 +595,7 @@ export default function ConfiguracionPage() {
                 setBusy={setBusy}
                 setError={setError}
                 onCreated={() => setSelection({ kind: "hostel" })}
+                onDataSynced={syncData}
               />
             ) : null}
 
@@ -727,6 +607,7 @@ export default function ConfiguracionPage() {
                 setBusy={setBusy}
                 setError={setError}
                 onCreated={() => setSelection({ kind: "hostel" })}
+                onDataSynced={syncData}
               />
             ) : null}
 
@@ -739,6 +620,7 @@ export default function ConfiguracionPage() {
                 setBusy={setBusy}
                 setError={setError}
                 onCreated={() => setSelection({ kind: "hostel" })}
+                onDataSynced={syncData}
               />
             ) : null}
           </div>
@@ -754,12 +636,14 @@ function HostelPanel({
   busy,
   setBusy,
   setError,
+  onDataSynced,
 }: {
   hostelId: string;
   hostel: Hostel | null;
   busy: boolean;
   setBusy: (v: boolean) => void;
   setError: (v: string | null) => void;
+  onDataSynced?: () => void;
 }) {
   const [nombre, setNombre] = useState("");
   const [direccion, setDireccion] = useState("");
@@ -777,6 +661,7 @@ function HostelPanel({
         nombre: nombre.trim(),
         direccion: direccion.trim(),
       } satisfies Hostel);
+      onDataSynced?.();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error guardando hostel"));
     } finally {
@@ -818,6 +703,7 @@ function PlantaPanel({
   setBusy,
   setError,
   onDeleted,
+  onDataSynced,
 }: {
   hostelId: string;
   planta: PlantaNode | null;
@@ -825,6 +711,7 @@ function PlantaPanel({
   setBusy: (v: boolean) => void;
   setError: (v: string | null) => void;
   onDeleted: () => void;
+  onDataSynced?: () => void;
 }) {
   const [nombre, setNombre] = useState("");
   const [orden, setOrden] = useState("0");
@@ -843,6 +730,7 @@ function PlantaPanel({
         nombre: nombre.trim(),
         orden: asNumber(orden, planta.data.orden ?? 0),
       } satisfies Planta);
+      onDataSynced?.();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error guardando planta"));
     } finally {
@@ -861,6 +749,7 @@ function PlantaPanel({
     setError(null);
     try {
       await deleteDoc(plantaRef(hostelId, planta.id));
+      onDataSynced?.();
       onDeleted();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error eliminando planta"));
@@ -918,6 +807,7 @@ function EspacioPanel({
   setBusy,
   setError,
   onDeleted,
+  onDataSynced,
 }: {
   hostelId: string;
   planta: PlantaNode | null;
@@ -927,6 +817,7 @@ function EspacioPanel({
   setBusy: (v: boolean) => void;
   setError: (v: string | null) => void;
   onDeleted: () => void;
+  onDataSynced?: () => void;
 }) {
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState<EspacioTipo>("compartido");
@@ -984,6 +875,7 @@ function EspacioPanel({
           activo: d.activo,
         } as Partial<Cama> & { activo: boolean });
       }
+      onDataSynced?.();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error guardando espacio"));
     } finally {
@@ -1002,6 +894,7 @@ function EspacioPanel({
     setError(null);
     try {
       await deleteDoc(espacioRef(hostelId, planta.id, espacio.id));
+      onDataSynced?.();
       onDeleted();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error eliminando espacio"));
@@ -1153,6 +1046,7 @@ function CamaPanel({
   setBusy,
   setError,
   onDeleted,
+  onDataSynced,
 }: {
   hostelId: string;
   planta: PlantaNode | null;
@@ -1162,6 +1056,7 @@ function CamaPanel({
   setBusy: (v: boolean) => void;
   setError: (v: string | null) => void;
   onDeleted: () => void;
+  onDataSynced?: () => void;
 }) {
   const [nombre, setNombre] = useState("");
   const [estado, setEstado] = useState<CamaEstado>("libre");
@@ -1183,6 +1078,7 @@ function CamaPanel({
         estado,
         activo: visible,
       } as Partial<Cama> & { activo: boolean });
+      onDataSynced?.();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error guardando cama"));
     } finally {
@@ -1199,6 +1095,7 @@ function CamaPanel({
     setError(null);
     try {
       await deleteDoc(camaRef(hostelId, planta.id, espacio.id, cama.id));
+      onDataSynced?.();
       onDeleted();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error eliminando cama"));
@@ -1265,6 +1162,7 @@ function AddPlantaPanel({
   setBusy,
   setError,
   onCreated,
+  onDataSynced,
 }: {
   hostelId: string;
   existingPlantas: PlantaNode[];
@@ -1272,6 +1170,7 @@ function AddPlantaPanel({
   setBusy: (v: boolean) => void;
   setError: (v: string | null) => void;
   onCreated: () => void;
+  onDataSynced?: () => void;
 }) {
   const [nombre, setNombre] = useState("");
   const [orden, setOrden] = useState("");
@@ -1289,6 +1188,7 @@ function AddPlantaPanel({
         nombre: nombre.trim() || "Nueva planta",
         orden: asNumber(orden, 0),
       } satisfies Planta);
+      onDataSynced?.();
       onCreated();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error creando planta"));
@@ -1329,6 +1229,7 @@ function AddEspacioPanel({
   setBusy,
   setError,
   onCreated,
+  onDataSynced,
 }: {
   hostelId: string;
   planta: PlantaNode | null;
@@ -1336,6 +1237,7 @@ function AddEspacioPanel({
   setBusy: (v: boolean) => void;
   setError: (v: string | null) => void;
   onCreated: () => void;
+  onDataSynced?: () => void;
 }) {
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState<EspacioTipo>("compartido");
@@ -1353,6 +1255,7 @@ function AddEspacioPanel({
         precio: asNumber(precio, 0),
         activo,
       } satisfies Espacio);
+      onDataSynced?.();
       onCreated();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error creando espacio"));
@@ -1420,6 +1323,7 @@ function AddCamaPanel({
   setBusy,
   setError,
   onCreated,
+  onDataSynced,
 }: {
   hostelId: string;
   planta: PlantaNode | null;
@@ -1428,6 +1332,7 @@ function AddCamaPanel({
   setBusy: (v: boolean) => void;
   setError: (v: string | null) => void;
   onCreated: () => void;
+  onDataSynced?: () => void;
 }) {
   const [nombre, setNombre] = useState("");
   const [estado, setEstado] = useState<CamaEstado>("libre");
@@ -1443,6 +1348,7 @@ function AddCamaPanel({
         estado,
         activo: visible,
       } as Cama & { activo: boolean });
+      onDataSynced?.();
       onCreated();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error creando cama"));

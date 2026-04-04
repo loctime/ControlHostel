@@ -1,27 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  onSnapshot,
-  orderBy,
-  query,
-  updateDoc,
-} from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
+import { updateDoc } from "firebase/firestore";
 import type { Cama, Espacio, Planta, Reserva, ReservaEstado } from "@/lib/db";
-import {
-  camasCollection,
-  espaciosCollection,
-  plantasCollection,
-  reservaRef,
-  reservasCollection,
-} from "@/lib/db";
+import { reservaRef } from "@/lib/db";
+import { useHostelSnapshot } from "@/lib/hostel-snapshot-client";
 import {
   NuevaReservaModal,
   type CamaNode as ModalCamaNode,
   type EspacioKey as ModalEspacioKey,
   type ReservaNode as ModalReservaNode,
 } from "@/components/NuevaReservaModal";
-import { useHostel } from "@/context/HostelContext";
 
 type Id = string;
 type PlantaNode = { id: Id; data: Planta };
@@ -168,14 +157,8 @@ function DangerButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
 }
 
 export default function ReservasPage() {
-  const { hostelId } = useHostel();
-  if (!hostelId) return null;
-
-  const [plantas, setPlantas] = useState<PlantaNode[]>([]);
-  const [espaciosByPlanta, setEspaciosByPlanta] = useState<Record<Id, EspacioNode[]>>({});
-  const [camasByEspacio, setCamasByEspacio] = useState<Record<EspacioKey, CamaNode[]>>({});
-
-  const [reservas, setReservas] = useState<ReservaNode[]>([]);
+  const { hostelId, plantas, espaciosByPlanta, camasByEspacio, reservas, loadError, loading, reload } =
+    useHostelSnapshot();
 
   const [queryText, setQueryText] = useState("");
   const [filterEspacioKey, setFilterEspacioKey] = useState<EspacioKey | "">("");
@@ -186,117 +169,11 @@ export default function ReservasPage() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const unsubEspaciosByPlanta = useRef(new Map<Id, () => void>());
-  const unsubCamasByEspacio = useRef(new Map<EspacioKey, () => void>());
+  const [newOpen, setNewOpen] = useState(false);
 
   useEffect(() => {
-    const espaciosMap = unsubEspaciosByPlanta.current;
-    const camasMap = unsubCamasByEspacio.current;
-
-    const qPlantas = query(plantasCollection(hostelId), orderBy("orden", "asc"));
-    const unsubPlantas = onSnapshot(
-      qPlantas,
-      (snap) => {
-        setError(null);
-        const next = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
-        setPlantas(next);
-
-        const plantaIds = new Set(next.map((p) => p.id));
-        for (const [plantaId, unsub] of espaciosMap.entries()) {
-          if (!plantaIds.has(plantaId)) {
-            unsub();
-            espaciosMap.delete(plantaId);
-            setEspaciosByPlanta((prev) => {
-              const copy = { ...prev };
-              delete copy[plantaId];
-              return copy;
-            });
-          }
-        }
-
-        for (const plantaId of plantaIds) {
-          if (espaciosMap.has(plantaId)) continue;
-
-          const qEspacios = query(
-            espaciosCollection(hostelId, plantaId),
-            orderBy("nombre", "asc"),
-          );
-          const unsubEspacios = onSnapshot(
-            qEspacios,
-            (snapEspacios) => {
-              setError(null);
-              const nextEspacios = snapEspacios.docs.map((d) => ({ id: d.id, data: d.data() }));
-              setEspaciosByPlanta((prev) => ({ ...prev, [plantaId]: nextEspacios }));
-
-              const nextKeys = new Set(nextEspacios.map((e) => `${plantaId}/${e.id}` as EspacioKey));
-              for (const [key, unsubCamas] of camasMap.entries()) {
-                if (!key.startsWith(`${plantaId}/`)) continue;
-                if (!nextKeys.has(key)) {
-                  unsubCamas();
-                  camasMap.delete(key);
-                  setCamasByEspacio((prev) => {
-                    const copy = { ...prev };
-                    delete copy[key];
-                    return copy;
-                  });
-                }
-              }
-
-              for (const espacio of nextEspacios) {
-                const key = `${plantaId}/${espacio.id}` as EspacioKey;
-                if (camasMap.has(key)) continue;
-
-                const qCamas = query(
-                  camasCollection(hostelId, plantaId, espacio.id),
-                  orderBy("nombre", "asc"),
-                );
-                const unsubCamas = onSnapshot(
-                  qCamas,
-                  (snapCamas) => {
-                    setError(null);
-                    const nextCamas = snapCamas.docs.map((d) => {
-                      const raw = d.data() as Cama & { activo?: boolean };
-                      return { id: d.id, data: raw };
-                    });
-                    setCamasByEspacio((prev) => ({ ...prev, [key]: nextCamas }));
-                  },
-                  (e) => setError(errorMessage(e, "Error leyendo camas")),
-                );
-
-                camasMap.set(key, unsubCamas);
-              }
-            },
-            (e) => setError(errorMessage(e, "Error leyendo espacios")),
-          );
-
-          espaciosMap.set(plantaId, unsubEspacios);
-        }
-      },
-      (e) => setError(errorMessage(e, "Error leyendo plantas")),
-    );
-
-    const qReservas = query(reservasCollection(hostelId), orderBy("checkin", "desc"));
-    const unsubReservas = onSnapshot(
-      qReservas,
-      (snap) => {
-        setError(null);
-        const next = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
-        setReservas(next);
-        setSelectedReservaId((prev) => (prev && next.some((r) => r.id === prev) ? prev : null));
-      },
-      (e) => setError(errorMessage(e, "Error leyendo reservas")),
-    );
-
-    return () => {
-      unsubPlantas();
-      unsubReservas();
-      for (const u of espaciosMap.values()) u();
-      for (const u of camasMap.values()) u();
-      espaciosMap.clear();
-      camasMap.clear();
-    };
-  }, [hostelId]);
+    setSelectedReservaId((prev) => (prev && reservas.some((r) => r.id === prev) ? prev : null));
+  }, [reservas]);
 
   const espaciosFlat = useMemo(() => {
     const out: Array<{ key: EspacioKey; plantaId: Id; espacioId: Id; label: string }> = [];
@@ -417,6 +294,7 @@ export default function ReservasPage() {
     setError(null);
     try {
       await updateDoc(reservaRef(hostelId, reservaId), { estado: next } satisfies Partial<Reserva>);
+      void reload();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error actualizando reserva"));
     } finally {
@@ -431,7 +309,6 @@ export default function ReservasPage() {
     if (s === "pendiente") return setEstado(r.id, "confirmada");
   }
 
-  const [newOpen, setNewOpen] = useState(false);
   const detail = selectedReserva;
   const detailSpace = detail
     ? espacioNameByKey.get(`${detail.data.plantaId}/${detail.data.espacioId}` as EspacioKey)
@@ -441,6 +318,8 @@ export default function ReservasPage() {
         `${detail.data.plantaId}/${detail.data.espacioId}/${detail.data.camaId}` as CamaKey,
       )
     : null;
+
+  if (loading || !hostelId) return null;
 
   return (
     <div className="space-y-5 text-[var(--text-primary)]" style={{ backgroundColor: "var(--bg-page)" }}>
@@ -535,12 +414,12 @@ export default function ReservasPage() {
         </div>
       </section>
 
-      {error ? (
+      {loadError || error ? (
         <div
           className="rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-component)] p-3 text-sm"
           style={{ borderColor: "rgba(255, 99, 99, 0.45)" }}
         >
-          {error}
+          {loadError ?? error}
         </div>
       ) : null}
 

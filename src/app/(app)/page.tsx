@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Timestamp, updateDoc } from "firebase/firestore";
+import { updateDoc } from "firebase/firestore";
 import type { Cama, Espacio, Planta, Reserva, ReservaEstado } from "@/lib/db";
 import { reservaRef } from "@/lib/db";
+import { fetchHostelSnapshot } from "@/lib/hostel-snapshot-client";
 import {
   NuevaReservaModal,
   type CamaNode as ModalCamaNode,
@@ -96,47 +97,6 @@ type PanelSnapshot = {
   reservas: ReservaNode[];
 };
 
-/** Lee plantas/espacios/camas/reservas vía Admin SDK (no depende de reglas cliente). */
-async function loadPanelSnapshotFromApi(): Promise<PanelSnapshot> {
-  const res = await fetch("/api/hostels/snapshot", { credentials: "same-origin" });
-  const json = (await res.json()) as {
-    error?: string;
-    plantas?: PlantaNode[];
-    espaciosByPlanta?: Record<Id, EspacioNode[]>;
-    camasByEspacio?: Record<string, CamaNode[]>;
-    reservas?: Array<{
-      id: string;
-      data: Record<string, unknown> & { checkinMillis: number; checkoutMillis: number };
-    }>;
-  };
-
-  if (!res.ok) {
-    throw new Error(json.error ?? `Error del servidor (${res.status})`);
-  }
-  if (!json.plantas || !json.espaciosByPlanta || !json.camasByEspacio || !json.reservas) {
-    throw new Error("Respuesta del servidor incompleta");
-  }
-
-  const reservas: ReservaNode[] = json.reservas.map((r) => {
-    const { checkinMillis, checkoutMillis, ...rest } = r.data;
-    return {
-      id: r.id,
-      data: {
-        ...rest,
-        checkin: Timestamp.fromMillis(Number(checkinMillis)),
-        checkout: Timestamp.fromMillis(Number(checkoutMillis)),
-      } as Reserva,
-    };
-  });
-
-  return {
-    plantas: json.plantas,
-    espaciosByPlanta: json.espaciosByPlanta,
-    camasByEspacio: json.camasByEspacio as Record<EspacioKey, CamaNode[]>,
-    reservas,
-  };
-}
-
 export default function PanelPage() {
   const { hostelId, loading: hostelLoading } = useHostel();
   if (hostelLoading) return null;
@@ -178,9 +138,14 @@ export default function PanelPage() {
 
     async function tick() {
       try {
-        const data = await loadPanelSnapshotFromApi();
+        const full = await fetchHostelSnapshot();
         if (cancelled) return;
-        applySnapshot(data);
+        applySnapshot({
+          plantas: full.plantas,
+          espaciosByPlanta: full.espaciosByPlanta,
+          camasByEspacio: full.camasByEspacio as Record<EspacioKey, CamaNode[]>,
+          reservas: full.reservas,
+        });
       } catch (e) {
         if (cancelled) return;
         console.error("[Panel] snapshot API", e);
@@ -329,8 +294,13 @@ export default function PanelPage() {
     setError(null);
     try {
       await updateDoc(reservaRef(hostelId, reservaId), { estado: next } satisfies Partial<Reserva>);
-      const data = await loadPanelSnapshotFromApi();
-      applySnapshot(data);
+      const full = await fetchHostelSnapshot();
+      applySnapshot({
+        plantas: full.plantas,
+        espaciosByPlanta: full.espaciosByPlanta,
+        camasByEspacio: full.camasByEspacio as Record<EspacioKey, CamaNode[]>,
+        reservas: full.reservas,
+      });
     } catch (e: unknown) {
       setError(userFacingFirestoreError(e, "Actualizar reserva"));
     } finally {

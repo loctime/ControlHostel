@@ -99,12 +99,37 @@ export async function GET() {
       };
     });
 
+    const hostelSnap = await db.collection("hostels").doc(hostelId).get();
+    const hostel = hostelSnap.exists ? hostelSnap.data() : null;
+
+    const bloqueosSnap = await db
+      .collection("hostels")
+      .doc(hostelId)
+      .collection("bloqueos")
+      .orderBy("desde", "desc")
+      .get();
+
+    const bloqueos = bloqueosSnap.docs.map((d) => {
+      const data = d.data();
+      const { desde, hasta, ...rest } = data;
+      return {
+        id: d.id,
+        data: {
+          ...rest,
+          desdeMillis: toMillis(desde),
+          hastaMillis: toMillis(hasta),
+        },
+      };
+    });
+
     return NextResponse.json({
       hostelId,
+      hostel,
       plantas,
       espaciosByPlanta,
       camasByEspacio,
       reservas,
+      bloqueos,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Error leyendo datos";
