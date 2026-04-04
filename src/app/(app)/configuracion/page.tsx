@@ -359,7 +359,7 @@ export default function ConfiguracionPage() {
   async function confirmTreeAdd() {
     if (!treeAddForm) return;
     const nombre = treeAddNombre.trim();
-    if (!nombre) {
+    if (!nombre && treeAddForm?.kind !== "cama") {
       setError("Escribí un nombre para crear el elemento.");
       return;
     }
@@ -433,6 +433,11 @@ export default function ConfiguracionPage() {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (treeAddForm?.kind !== "cama") return;
+    void confirmTreeAdd();
+  }, [treeAddForm]);
 
   const treeHostelTitle = hostel?.nombre?.trim() ? hostel.nombre : "Hostel";
   const treeHostelSubtitle = hostel?.direccion?.trim() ? hostel.direccion : "Sin dirección";
@@ -674,39 +679,26 @@ export default function ConfiguracionPage() {
                                   )}
 
                                   {showCamasInTree ? (
-                                    treeAddForm?.kind === "cama" &&
-                                    treeAddForm.plantaId === planta.id &&
-                                    treeAddForm.espacioId === espacio.id ? (
-                                      <TreeAddNombreInline
-                                        nombre={treeAddNombre}
-                                        onNombreChange={setTreeAddNombre}
-                                        onConfirm={confirmTreeAdd}
-                                        onCancel={cancelTreeAdd}
-                                        busy={busy}
-                                        placeholder="Ej. Cama 1"
-                                      />
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        disabled={busy}
-                                        onClick={() => {
-                                          setTreeAddNombre("");
-                                          setTreeAddForm({
-                                            kind: "cama",
-                                            plantaId: planta.id,
-                                            espacioId: espacio.id,
-                                          });
-                                        }}
-                                        className="
-                                          w-full rounded-xl border border-dashed border-[var(--border-secondary)]
-                                          bg-[var(--bg-page)] px-3 py-2 text-left text-sm text-[var(--text-secondary)]
-                                          transition hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]
-                                          disabled:opacity-50
-                                        "
-                                      >
-                                        + Agregar cama
-                                      </button>
-                                    )
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => {
+                                        setTreeAddNombre("");
+                                        setTreeAddForm({
+                                          kind: "cama",
+                                          plantaId: planta.id,
+                                          espacioId: espacio.id,
+                                        });
+                                      }}
+                                      className="
+                                        w-full rounded-xl border border-dashed border-[var(--border-secondary)]
+                                        bg-[var(--bg-page)] px-3 py-2 text-left text-sm text-[var(--text-secondary)]
+                                        transition hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]
+                                        disabled:opacity-50
+                                      "
+                                    >
+                                      + Agregar cama
+                                    </button>
                                   ) : null}
                                 </div>
                               ) : null}
