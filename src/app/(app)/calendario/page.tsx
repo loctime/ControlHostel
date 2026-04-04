@@ -297,6 +297,31 @@
       undefined,
     );
 
+    const [deletingBloqueoId, setDeletingBloqueoId] = useState<string | null>(null);
+
+    async function eliminarBloqueo(bloqueoId: string) {
+      if (deletingBloqueoId) return;
+      setDeletingBloqueoId(bloqueoId);
+      setError(null);
+      try {
+        const res = await fetch("/api/hostels/bloqueos/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ bloqueoId }),
+        });
+        if (!res.ok) {
+          const data = (await res.json()) as { error?: string };
+          throw new Error(data.error ?? "Error eliminando bloqueo");
+        }
+        void reload();
+      } catch (e) {
+        setError(errorMessage(e, "Error eliminando bloqueo"));
+      } finally {
+        setDeletingBloqueoId(null);
+      }
+    }
+
     // Modal bloquear fechas
     const [blockOpen, setBlockOpen] = useState(false);
     const [blockDesde, setBlockDesde] = useState(() => toYmd(new Date()));
@@ -318,6 +343,16 @@
       }
       return map;
     }, [espaciosByPlanta, plantas]);
+
+    const camaNameById = useMemo(() => {
+      const map = new Map<string, string>();
+      for (const camas of Object.values(camasByEspacio)) {
+        for (const cama of camas) {
+          map.set(cama.id, cama.data.nombre || cama.id);
+        }
+      }
+      return map;
+    }, [camasByEspacio]);
 
     function getCamaStatus(args: {
       plantaId: Id;
@@ -1226,7 +1261,7 @@
                               {" → "}
                               {b.data.hasta.toDate().toLocaleDateString("es-AR")}
                               {" · "}
-                              Cama: {b.data.camaId}
+                              Cama: {camaNameById.get(b.data.camaId) ?? b.data.camaId}
                             </div>
                             {b.data.motivo?.trim() ? (
                               <div className="mt-2 text-xs text-[var(--text-secondary)]">
@@ -1234,15 +1269,32 @@
                               </div>
                             ) : null}
                           </div>
-                          <span
-                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
-                            style={{
-                              backgroundColor: "rgba(133, 77, 14, 0.55)",
-                              color: "rgb(253, 230, 138)",
-                            }}
-                          >
-                            Bloqueada
-                          </span>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span
+                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+                              style={{
+                                backgroundColor: "rgba(133, 77, 14, 0.55)",
+                                color: "rgb(253, 230, 138)",
+                              }}
+                            >
+                              Bloqueada
+                            </span>
+                            <button
+                              type="button"
+                              disabled={deletingBloqueoId !== null}
+                              onClick={() => void eliminarBloqueo(b.id)}
+                              title="Eliminar bloqueo"
+                              className="inline-flex items-center justify-center rounded-lg p-1.5 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)] disabled:opacity-50"
+                            >
+                              {deletingBloqueoId === b.id ? (
+                                <span className="text-xs">...</span>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                                  <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );

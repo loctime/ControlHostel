@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { auth } from "@/lib/firebase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,35 +10,20 @@ export default function LoginPage() {
     signInWithEmail,
     signInWithGoogle,
     loading: authLoading,
-    user,
   } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    console.log("[login] mounted", {
-      authLoading,
-      hasUser: Boolean(user),
-    });
-  }, [authLoading, user]);
-
   async function handleGoogle() {
-    console.log("[login] google start");
     setError(null);
     setPending(true);
     try {
       await signInWithGoogle();
-      // `user` de useAuth sigue siendo el valor del render anterior (closure); el estado real está en Firebase Auth.
-      console.log("[login] google auth OK -> redirect /", {
-        currentUserUid: auth.currentUser?.uid ?? null,
-      });
       router.push("/");
       router.refresh();
-      console.log("[login] redirect triggered (router.push + refresh)");
     } catch (e) {
-      console.error("[login] google auth FAILED", e);
       setError(e instanceof Error ? e.message : "Error al iniciar con Google");
     } finally {
       setPending(false);
@@ -47,20 +31,14 @@ export default function LoginPage() {
   }
 
   async function handleEmailSubmit(ev: React.FormEvent) {
-    console.log("[login] email/password start");
     ev.preventDefault();
     setError(null);
     setPending(true);
     try {
       await signInWithEmail(email.trim(), password);
-      console.log("[login] email auth OK -> redirect /", {
-        email: email.trim(),
-      });
       router.push("/");
       router.refresh();
-      console.log("[login] redirect triggered (router.push + refresh)");
     } catch (e) {
-      console.error("[login] email auth FAILED", e);
       setError(e instanceof Error ? e.message : "Credenciales inválidas");
     } finally {
       setPending(false);
@@ -171,6 +149,21 @@ export default function LoginPage() {
             {busy ? "…" : "Entrar"}
           </button>
         </form>
+
+        <div className="flex flex-col items-center gap-2 text-sm">
+          <a
+            href="/login/forgot-password"
+            className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+          >
+            ¿Olvidaste tu contraseña?
+          </a>
+          <a
+            href="/register"
+            className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+          >
+            ¿No tenés cuenta? <span className="font-medium">Registrate</span>
+          </a>
+        </div>
       </div>
     </main>
   );

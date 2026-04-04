@@ -39,6 +39,39 @@ function getFirebaseApp(): FirebaseApp {
   return getApp();
 }
 
-export const app: FirebaseApp = getFirebaseApp();
-export const auth: Auth = getAuth(app);
-export const db: Firestore = getOrCreateFirestore(app);
+// Firebase client SDK solo puede inicializarse en el browser.
+// Durante SSR/build la inicialización se difiere para evitar errores con env vars ausentes.
+let _app: FirebaseApp | null = null;
+let _auth: Auth | null = null;
+let _db: Firestore | null = null;
+
+function ensureInitialized() {
+  if (typeof window === "undefined") {
+    throw new Error("Firebase client SDK solo puede usarse en el browser");
+  }
+  if (!_app) {
+    _app = getFirebaseApp();
+    _auth = getAuth(_app);
+    _db = getOrCreateFirestore(_app);
+  }
+  return { app: _app, auth: _auth!, db: _db! };
+}
+
+// Proxies que se inicializan de forma lazy
+export const app = new Proxy({} as FirebaseApp, {
+  get(_, prop) {
+    return ensureInitialized().app[prop as keyof FirebaseApp];
+  },
+});
+
+export const auth = new Proxy({} as Auth, {
+  get(_, prop) {
+    return ensureInitialized().auth[prop as keyof Auth];
+  },
+});
+
+export const db = new Proxy({} as Firestore, {
+  get(_, prop) {
+    return ensureInitialized().db[prop as keyof Firestore];
+  },
+});
