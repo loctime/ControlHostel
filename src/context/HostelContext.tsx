@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getDoc } from "firebase/firestore";
+import { getDoc, onSnapshot } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import type { Usuario } from "@/lib/usuario";
 import { usuarioRef } from "@/lib/usuario";
@@ -62,36 +62,31 @@ export function HostelProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(true);
-    let cancelled = false;
     let initialReadDone = false;
-    const uid = user.uid;
 
-    async function tick() {
-      try {
-        const snap = await getDoc(usuarioRef(uid));
-        if (cancelled) return;
+    const unsubscribe = onSnapshot(
+      usuarioRef(user.uid),
+      (snap) => {
         if (!snap.exists()) {
           setHostelId(null);
         } else {
           setHostelId(hostelIdFromUsuarioData(snap.data() as Usuario));
         }
-      } catch {
-        if (!cancelled) setHostelId(null);
-      } finally {
-        if (!cancelled && !initialReadDone) {
+        if (!initialReadDone) {
           initialReadDone = true;
           setLoading(false);
         }
-      }
-    }
+      },
+      () => {
+        setHostelId(null);
+        if (!initialReadDone) {
+          initialReadDone = true;
+          setLoading(false);
+        }
+      },
+    );
 
-    void tick();
-    const interval = window.setInterval(() => void tick(), 4000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
+    return unsubscribe;
   }, [authLoading, user]);
 
   const value = useMemo(
@@ -106,4 +101,3 @@ export function useHostel() {
   if (!ctx) throw new Error("useHostel debe usarse dentro de HostelProvider");
   return ctx;
 }
-

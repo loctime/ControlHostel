@@ -11,6 +11,11 @@ import {
   type EspacioKey as ModalEspacioKey,
   type ReservaNode as ModalReservaNode,
 } from "@/components/NuevaReservaModal";
+import {
+  EditarReservaModal,
+  type ReservaNode as EditarReservaNode,
+} from "@/components/EditarReservaModal";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PageSkeleton } from "@/components/PageSkeleton";
 
 type Id = string;
@@ -171,6 +176,8 @@ export default function ReservasPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
 
   useEffect(() => {
     setSelectedReservaId((prev) => (prev && reservas.some((r) => r.id === prev) ? prev : null));
@@ -615,9 +622,15 @@ export default function ReservasPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <SecondaryButton type="button" disabled>
-                    Editar
-                  </SecondaryButton>
+                  {detail.data.estado !== "cancelada" && detail.data.estado !== "completada" ? (
+                    <SecondaryButton
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setEditOpen(true)}
+                    >
+                      Editar
+                    </SecondaryButton>
+                  ) : null}
 
                   {detail.data.estado === "confirmada" ? (
                     <PrimaryButton
@@ -653,11 +666,7 @@ export default function ReservasPage() {
                     <DangerButton
                       type="button"
                       disabled={busy}
-                      onClick={() => {
-                        const ok = confirm("¿Cancelar esta reserva?");
-                        if (!ok) return;
-                        void setEstado(detail.id, "cancelada");
-                      }}
+                      onClick={() => setConfirmCancelOpen(true)}
                     >
                       Cancelar reserva
                     </DangerButton>
@@ -675,6 +684,27 @@ export default function ReservasPage() {
         camasByEspacio={camasByEspacio as unknown as Record<ModalEspacioKey, ModalCamaNode[]>}
         espacioNameByKey={espacioNameByKey as unknown as Map<ModalEspacioKey, { plantaName: string; espacioName: string }>}
         reservas={reservas as unknown as ModalReservaNode[]}
+      />
+
+      <EditarReservaModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        reserva={selectedReserva as EditarReservaNode | null}
+        onSuccess={() => void reload()}
+      />
+
+      <ConfirmDialog
+        open={confirmCancelOpen}
+        title="Cancelar reserva"
+        message="¿Estás seguro que querés cancelar esta reserva? Esta acción no se puede deshacer."
+        confirmLabel="Sí, cancelar"
+        danger
+        busy={busy}
+        onConfirm={() => {
+          setConfirmCancelOpen(false);
+          if (selectedReserva) void setEstado(selectedReserva.id, "cancelada");
+        }}
+        onCancel={() => setConfirmCancelOpen(false)}
       />
     </div>
   );

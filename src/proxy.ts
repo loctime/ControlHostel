@@ -1,10 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/session-cookie";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith("/login") || pathname.startsWith("/api")) {
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/api")
+  ) {
     return NextResponse.next();
   }
 

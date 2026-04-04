@@ -97,7 +97,18 @@ export async function POST(request: Request) {
       case "deletePlanta": {
         const x = p as Record<string, unknown>;
         const plantaId = asNonEmptyString(x.plantaId, "plantaId");
-        await hRef.collection("plantas").doc(plantaId).delete();
+        const plantaRef = hRef.collection("plantas").doc(plantaId);
+        const espaciosSnap = await plantaRef.collection("espacios").get();
+        const batch = db.batch();
+        for (const espacioDoc of espaciosSnap.docs) {
+          const camasSnap = await espacioDoc.ref.collection("camas").get();
+          for (const camaDoc of camasSnap.docs) {
+            batch.delete(camaDoc.ref);
+          }
+          batch.delete(espacioDoc.ref);
+        }
+        batch.delete(plantaRef);
+        await batch.commit();
         return NextResponse.json({ ok: true });
       }
 
@@ -120,7 +131,18 @@ export async function POST(request: Request) {
         const x = p as Record<string, unknown>;
         const plantaId = asNonEmptyString(x.plantaId, "plantaId");
         const espacioId = asNonEmptyString(x.espacioId, "espacioId");
-        await hRef.collection("plantas").doc(plantaId).collection("espacios").doc(espacioId).delete();
+        const espacioRef = hRef
+          .collection("plantas")
+          .doc(plantaId)
+          .collection("espacios")
+          .doc(espacioId);
+        const camasSnap = await espacioRef.collection("camas").get();
+        const batch = db.batch();
+        for (const camaDoc of camasSnap.docs) {
+          batch.delete(camaDoc.ref);
+        }
+        batch.delete(espacioRef);
+        await batch.commit();
         return NextResponse.json({ ok: true });
       }
 
