@@ -21,8 +21,8 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function applyHtmlClass(mode: ThemeMode) {
-  // Default es dark => no aplica la clase `light`.
-  document.documentElement.classList.toggle("light", mode === "light");
+  // Default es light => solo aplica la clase `dark` cuando es necesario.
+  document.documentElement.classList.toggle("dark", mode === "dark");
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -30,9 +30,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     try {
       const stored = window.localStorage.getItem("theme");
       if (stored === "light" || stored === "dark") return stored;
-      return "dark";
+      return "light";
     } catch {
-      return "dark";
+      return "light";
     }
   });
 
