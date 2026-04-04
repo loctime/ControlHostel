@@ -1,33 +1,33 @@
 @import "tailwindcss";
 
 :root {
-  /* Modo oscuro (default) */
-  --bg-sidebar: #2f2f33;
-  --bg-page: #1a2238;
-  --bg-component: #2f2f33;
-  --bg-list: #22252e;
-  --bg-button: #1f2140;
-  --bg-accent: #7c83ff;
-  --border-primary: #7c83ff;
-  --border-secondary: #1f2140;
-  --text-primary: #f0f1f5;
-  --text-secondary: #9a9db5;
-  --text-tertiary: #5a5d7a;
+  /* Modo claro (default) */
+  --bg-sidebar: #ffffff;
+  --bg-page: #f1f5f9;
+  --bg-component: #ffffff;
+  --bg-list: #f8fafc;
+  --bg-button: #2563eb;
+  --bg-accent: #2563eb;
+  --border-primary: #2563eb;
+  --border-secondary: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
   --text-button: #ffffff;
 }
 
-.light {
-  --bg-sidebar: #f5f6f7;
-  --bg-page: #e8eaf2;
-  --bg-component: #ffffff;
-  --bg-list: #f0f1f5;
-  --bg-button: #0145f2;
-  --bg-accent: #2872a1;
-  --border-primary: #2f2f33;
-  --border-secondary: #c5c8d5;
-  --text-primary: #1a1c2e;
-  --text-secondary: #4a4d6a;
-  --text-tertiary: #8a8da5;
+.dark {
+  --bg-sidebar: #1e293b;
+  --bg-page: #0f172a;
+  --bg-component: #1e293b;
+  --bg-list: #162032;
+  --bg-button: #6366f1;
+  --bg-accent: #818cf8;
+  --border-primary: #6366f1;
+  --border-secondary: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #475569;
   --text-button: #ffffff;
 }
 
