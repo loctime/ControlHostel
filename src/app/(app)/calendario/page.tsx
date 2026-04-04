@@ -12,6 +12,7 @@ import type {
 } from "@/lib/db";
 import { bloqueosCollection, reservaRef } from "@/lib/db";
 import { useHostelSnapshot } from "@/lib/hostel-snapshot-client";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type Id = string;
 type PlantaNode = { id: Id; data: Planta };
@@ -527,7 +528,7 @@ export default function CalendarioPage() {
     }
   }
 
-  if (loading || !hostelId) return null;
+  if (loading || !hostelId) return <PageSkeleton variant="calendario" />;
 
   return (
     <div className="space-y-5 text-[var(--text-primary)]" style={{ backgroundColor: "var(--bg-page)" }}>

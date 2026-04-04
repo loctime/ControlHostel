@@ -11,6 +11,7 @@ import {
   type EspacioKey as ModalEspacioKey,
   type ReservaNode as ModalReservaNode,
 } from "@/components/NuevaReservaModal";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { useHostel } from "@/context/HostelContext";
 import { userFacingFirestoreError } from "@/lib/firestore-ui";
 
@@ -319,7 +320,7 @@ export default function PanelPage() {
     }
   }
 
-  if (hostelLoading || !hostelId) return null;
+  if (hostelLoading || !hostelId) return <PageSkeleton variant="panel" />;
 
   return (
     <div className="space-y-6 text-[var(--text-primary)]" style={{ backgroundColor: "var(--bg-page)" }}>

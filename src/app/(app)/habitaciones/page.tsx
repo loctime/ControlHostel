@@ -12,6 +12,7 @@ import {
   type CamaNode as ModalCamaNode,
   type ReservaNode as ModalReservaNode,
 } from "@/components/NuevaReservaModal";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type Id = string;
 type PlantaNode = { id: Id; data: Planta };
@@ -258,7 +259,7 @@ export default function HabitacionesPage() {
     }
   }
 
-  if (loading || !hostelId) return null;
+  if (loading || !hostelId) return <PageSkeleton variant="habitaciones" />;
 
   return (
     <div className="space-y-5 text-[var(--text-primary)]" style={{ backgroundColor: "var(--bg-page)" }}>
@@ -375,12 +376,16 @@ export default function HabitacionesPage() {
                                     setPanelTab("estado");
                                   }}
                                   className="
-                                    h-8 w-8 rounded-xl border border-black/10 transition
-                                    hover:opacity-90
+                                    flex h-8 w-8 items-center justify-center rounded-xl border border-black/10
+                                    transition hover:opacity-90
                                   "
                                   style={{ backgroundColor: statusColor(st) }}
                                   aria-label={title}
-                                />
+                                >
+                                  <span className="text-[10px] font-bold text-white leading-none select-none pointer-events-none">
+                                    {c.data.nombre || ""}
+                                  </span>
+                                </button>
                               );
                             })
                           )}
@@ -410,7 +415,7 @@ export default function HabitacionesPage() {
           <div className="flex items-start justify-between border-b border-[var(--border-secondary)] px-4 py-4">
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-[var(--text-primary)]">
-                {selectedInfo.cama?.camaName || "Cama"}
+                {`#${selectedInfo.cama?.camaName || "?"}`}
               </div>
               <div className="mt-1 truncate text-xs text-[var(--text-tertiary)]">
                 {selectedInfo.space

@@ -11,6 +11,7 @@ import {
   type EspacioKey as ModalEspacioKey,
   type ReservaNode as ModalReservaNode,
 } from "@/components/NuevaReservaModal";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type Id = string;
 type PlantaNode = { id: Id; data: Planta };
@@ -319,7 +320,7 @@ export default function ReservasPage() {
       )
     : null;
 
-  if (loading || !hostelId) return null;
+  if (loading || !hostelId) return <PageSkeleton variant="reservas" />;
 
   return (
     <div className="space-y-5 text-[var(--text-primary)]" style={{ backgroundColor: "var(--bg-page)" }}>

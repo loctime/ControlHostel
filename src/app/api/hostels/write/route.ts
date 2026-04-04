@@ -130,7 +130,16 @@ export async function POST(request: Request) {
         const espacioId = asNonEmptyString(x.espacioId, "espacioId");
         const estado = asString(x.estado, "estado");
         if (!CAMA_ESTADOS.has(estado)) throw new Error("estado de cama inválido");
-        const nombreCama = typeof x.nombre === "string" ? x.nombre.trim() : "";
+        const existingSnap = await hRef
+          .collection("plantas")
+          .doc(plantaId)
+          .collection("espacios")
+          .doc(espacioId)
+          .collection("camas")
+          .count()
+          .get();
+        const count = existingSnap.data().count;
+        const nombreFinal = String(count + 1);
         const ref = await hRef
           .collection("plantas")
           .doc(plantaId)
@@ -138,7 +147,7 @@ export async function POST(request: Request) {
           .doc(espacioId)
           .collection("camas")
           .add({
-            nombre: nombreCama || "Nueva cama",
+            nombre: nombreFinal,
             estado,
             activo: asBool(x.activo, "activo"),
           });

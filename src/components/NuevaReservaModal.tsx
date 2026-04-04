@@ -239,7 +239,7 @@ export function NuevaReservaModal({
           plantaId,
           espacioId,
           camaId,
-          label: `${spaceLabel} · ${cama.data.nombre || camaId}`,
+          label: `${spaceLabel} · #${cama.data.nombre || camaId}`,
         });
       }
     }

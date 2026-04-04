@@ -11,6 +11,7 @@ import type {
 } from "@/lib/db";
 import { postHostelWrite } from "@/lib/hostel-config-api";
 import { useHostelSnapshot } from "@/lib/hostel-snapshot-client";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type Id = string;
 
@@ -436,7 +437,7 @@ export default function ConfiguracionPage() {
   const treeHostelTitle = hostel?.nombre?.trim() ? hostel.nombre : "Hostel";
   const treeHostelSubtitle = hostel?.direccion?.trim() ? hostel.direccion : "Sin dirección";
 
-  if (loading || !hostelId) return null;
+  if (loading || !hostelId) return <PageSkeleton variant="configuracion" />;
 
   return (
     <div className="text-[var(--text-primary)]" style={{ backgroundColor: "var(--bg-page)" }}>
@@ -1435,8 +1436,13 @@ function CamaPanel({
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Field label="Nombre">
-          <TextInput value={nombre} onChange={(e) => setNombre(e.target.value)} />
+        <Field label="Número">
+          <TextInput
+            type="text"
+            inputMode="numeric"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+          />
         </Field>
         <Field label="Estado">
           <Select value={estado} onChange={(e) => setEstado(e.target.value as CamaEstado)}>
