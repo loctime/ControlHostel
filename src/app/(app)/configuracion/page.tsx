@@ -22,10 +22,7 @@ type Selection =
   | { kind: "hostel" }
   | { kind: "planta"; plantaId: Id }
   | { kind: "espacio"; plantaId: Id; espacioId: Id }
-  | { kind: "cama"; plantaId: Id; espacioId: Id; camaId: Id }
-  | { kind: "add_planta" }
-  | { kind: "add_espacio"; plantaId: Id }
-  | { kind: "add_cama"; plantaId: Id; espacioId: Id };
+  | { kind: "cama"; plantaId: Id; espacioId: Id; camaId: Id };
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -45,6 +42,10 @@ function asNumber(value: string, fallback: number) {
 function defaultCamaEstado(): CamaEstado {
   return "libre";
 }
+
+const TREE_CARD_ROW =
+  "flex w-full items-center gap-2 rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] px-3 py-2 text-left transition hover:bg-[var(--bg-list)]";
+const TREE_CARD_ROW_SELECTED = "border-[var(--border-primary)] bg-[var(--bg-list)]";
 
 const CAMA_ESTADOS: Array<{ id: CamaEstado; label: string }> = [
   { id: "libre", label: "Libre" },
@@ -173,6 +174,75 @@ function DangerButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   );
 }
 
+type TreeAddForm =
+  | null
+  | { kind: "planta" }
+  | { kind: "espacio"; plantaId: Id }
+  | { kind: "cama"; plantaId: Id; espacioId: Id };
+
+function TreeAddNombreInline({
+  nombre,
+  onNombreChange,
+  onConfirm,
+  onCancel,
+  busy,
+  placeholder,
+}: {
+  nombre: string;
+  onNombreChange: (v: string) => void;
+  onConfirm: () => void | Promise<void>;
+  onCancel: () => void;
+  busy: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <div
+      className="
+        rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] p-2 shadow-sm
+      "
+    >
+      <label className="block text-xs font-medium text-[var(--text-secondary)]">Nombre</label>
+      <TextInput
+        className="mt-1 py-1.5 text-sm"
+        value={nombre}
+        onChange={(e) => onNombreChange(e.target.value)}
+        placeholder={placeholder ?? "Nombre"}
+        disabled={busy}
+        autoFocus
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void onConfirm();
+          }
+          if (e.key === "Escape") onCancel();
+        }}
+      />
+      <div className="mt-2 flex flex-wrap gap-2">
+        <PrimaryButton
+          type="button"
+          className="px-3 py-1.5 text-xs"
+          disabled={busy}
+          onClick={() => void onConfirm()}
+        >
+          {busy ? "Creando..." : "Crear"}
+        </PrimaryButton>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onCancel}
+          className="
+            rounded-xl px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]
+            transition hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]
+            disabled:opacity-50
+          "
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ConfiguracionPage() {
   const {
     hostelId,
@@ -191,6 +261,8 @@ export default function ConfiguracionPage() {
   const [selection, setSelection] = useState<Selection>({ kind: "hostel" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [treeAddForm, setTreeAddForm] = useState<TreeAddForm>(null);
+  const [treeAddNombre, setTreeAddNombre] = useState("");
 
   const syncData = () => void reload();
 
@@ -201,20 +273,14 @@ export default function ConfiguracionPage() {
         ? selection.plantaId
         : selection.kind === "cama"
           ? selection.plantaId
-          : selection.kind === "add_espacio"
-            ? selection.plantaId
-            : selection.kind === "add_cama"
-              ? selection.plantaId
-              : null;
+          : null;
 
   const selectedEspacioId =
     selection.kind === "espacio"
       ? selection.espacioId
       : selection.kind === "cama"
         ? selection.espacioId
-        : selection.kind === "add_cama"
-          ? selection.espacioId
-          : null;
+        : null;
 
   const selectedCamaId = selection.kind === "cama" ? selection.camaId : null;
 
@@ -261,6 +327,89 @@ export default function ConfiguracionPage() {
     setExpandedEspacios((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
+  function cancelTreeAdd() {
+    setTreeAddForm(null);
+    setError(null);
+  }
+
+  async function confirmTreeAdd() {
+    if (!treeAddForm) return;
+    const nombre = treeAddNombre.trim();
+    if (!nombre) {
+      setError("Escribí un nombre para crear el elemento.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      if (treeAddForm.kind === "planta") {
+        const maxOrden = plantas.reduce((max, p) => Math.max(max, p.data.orden ?? 0), 0);
+        const { id } = await postHostelWrite({
+          op: "addPlanta",
+          payload: {
+            nombre,
+            orden: maxOrden + 1,
+          } satisfies Planta,
+        });
+        await reload();
+        setTreeAddForm(null);
+        if (id) {
+          setExpandedPlantas((prev) => ({ ...prev, [id]: true }));
+          setSelection({ kind: "planta", plantaId: id });
+        }
+      } else if (treeAddForm.kind === "espacio") {
+        const plantaId = treeAddForm.plantaId;
+        const { id } = await postHostelWrite({
+          op: "addEspacio",
+          payload: {
+            plantaId,
+            nombre,
+            tipo: "compartido",
+            precio: 0,
+            activo: true,
+          } satisfies Espacio & { plantaId: string },
+        });
+        await reload();
+        setTreeAddForm(null);
+        if (id) {
+          setExpandedPlantas((prev) => ({ ...prev, [plantaId]: true }));
+          setExpandedEspacios((prev) => ({ ...prev, [`${plantaId}/${id}`]: true }));
+          setSelection({ kind: "espacio", plantaId, espacioId: id });
+        }
+      } else {
+        const { plantaId, espacioId } = treeAddForm;
+        const { id } = await postHostelWrite({
+          op: "addCama",
+          payload: {
+            plantaId,
+            espacioId,
+            nombre,
+            estado: defaultCamaEstado(),
+            activo: true,
+          },
+        });
+        await reload();
+        setTreeAddForm(null);
+        if (id) {
+          setExpandedPlantas((prev) => ({ ...prev, [plantaId]: true }));
+          setExpandedEspacios((prev) => ({ ...prev, [`${plantaId}/${espacioId}`]: true }));
+          setSelection({ kind: "cama", plantaId, espacioId, camaId: id });
+        }
+      }
+    } catch (e: unknown) {
+      const msg =
+        treeAddForm.kind === "planta"
+          ? "Error creando planta"
+          : treeAddForm.kind === "espacio"
+            ? "Error creando espacio"
+            : "Error creando cama";
+      setError(errorMessage(e, msg));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const treeHostelTitle = hostel?.nombre?.trim() ? hostel.nombre : "Hostel";
   const treeHostelSubtitle = hostel?.direccion?.trim() ? hostel.direccion : "Sin dirección";
 
@@ -301,48 +450,42 @@ export default function ConfiguracionPage() {
               Estructura
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
               {plantas.map((planta) => {
                 const isExpanded = !!expandedPlantas[planta.id];
                 const isSelected = selection.kind === "planta" && selection.plantaId === planta.id;
                 const espacios = espaciosByPlanta[planta.id] ?? [];
 
                 return (
-                  <div key={planta.id} className="rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => togglePlanta(planta.id)}
-                        className="
-                          inline-flex h-7 w-7 items-center justify-center rounded-lg
-                          border border-transparent text-[var(--text-secondary)] transition
-                          hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]
-                        "
-                        aria-label={isExpanded ? "Colapsar planta" : "Expandir planta"}
+                  <div key={planta.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        togglePlanta(planta.id);
+                        setSelection({ kind: "planta", plantaId: planta.id });
+                      }}
+                      className={cx(TREE_CARD_ROW, isSelected && TREE_CARD_ROW_SELECTED)}
+                      aria-expanded={isExpanded}
+                      aria-label={isExpanded ? "Colapsar planta" : "Expandir planta"}
+                    >
+                      <span
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-base text-[var(--text-secondary)]"
+                        aria-hidden
                       >
-                        <span className="text-base">{isExpanded ? "▾" : "▸"}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelection({ kind: "planta", plantaId: planta.id })}
-                        className={cx(
-                          "flex-1 rounded-xl border px-3 py-2 text-left transition",
-                          isSelected
-                            ? "border-[var(--border-primary)] bg-[var(--bg-list)]"
-                            : "border-transparent hover:bg-[var(--bg-list)]",
-                        )}
-                      >
+                        {isExpanded ? "▾" : "▸"}
+                      </span>
+                      <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium text-[var(--text-primary)]">
                           {planta.data.nombre || "Planta"}
                         </div>
                         <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">
                           Orden: {planta.data.orden}
                         </div>
-                      </button>
-                    </div>
+                      </div>
+                    </button>
 
                     {isExpanded ? (
-                      <div className="ml-9 mt-1 space-y-1">
+                      <div className="ml-2 mt-2 space-y-2 border-l border-[var(--border-secondary)] pl-3">
                         {espacios.map((espacio) => {
                           const isEspacioSelected =
                             selection.kind === "espacio" &&
@@ -355,47 +498,39 @@ export default function ConfiguracionPage() {
                           const showCamasInTree = espacio.data.tipo !== "comun";
 
                           return (
-                            <div key={espacio.id} className="rounded-xl">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleEspacio(planta.id, espacio.id)}
-                                  className="
-                                    inline-flex h-7 w-7 items-center justify-center rounded-lg
-                                    border border-transparent text-[var(--text-secondary)] transition
-                                    hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]
-                                  "
-                                  aria-label={isExpandedEspacio ? "Colapsar espacio" : "Expandir espacio"}
+                            <div key={espacio.id}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  toggleEspacio(planta.id, espacio.id);
+                                  setSelection({
+                                    kind: "espacio",
+                                    plantaId: planta.id,
+                                    espacioId: espacio.id,
+                                  });
+                                }}
+                                className={cx(TREE_CARD_ROW, isEspacioSelected && TREE_CARD_ROW_SELECTED)}
+                                aria-expanded={isExpandedEspacio}
+                                aria-label={isExpandedEspacio ? "Colapsar espacio" : "Expandir espacio"}
+                              >
+                                <span
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-base text-[var(--text-secondary)]"
+                                  aria-hidden
                                 >
-                                  <span className="text-base">{isExpandedEspacio ? "▾" : "▸"}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setSelection({
-                                      kind: "espacio",
-                                      plantaId: planta.id,
-                                      espacioId: espacio.id,
-                                    })
-                                  }
-                                  className={cx(
-                                    "flex-1 rounded-xl border px-3 py-2 text-left transition",
-                                    isEspacioSelected
-                                      ? "border-[var(--border-primary)] bg-[var(--bg-list)]"
-                                      : "border-transparent hover:bg-[var(--bg-list)]",
-                                  )}
-                                >
+                                  {isExpandedEspacio ? "▾" : "▸"}
+                                </span>
+                                <div className="min-w-0 flex-1">
                                   <div className="text-sm font-medium text-[var(--text-primary)]">
                                     {espacio.data.nombre || "Espacio"}
                                   </div>
                                   <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">
                                     {espacio.data.tipo} · ${espacio.data.precio ?? 0}
                                   </div>
-                                </button>
-                              </div>
+                                </div>
+                              </button>
 
                               {isExpandedEspacio ? (
-                                <div className="ml-9 mt-1 space-y-1">
+                                <div className="ml-2 mt-2 space-y-2 border-l border-[var(--border-secondary)] pl-3">
                                   {showCamasInTree ? (
                                     camas.map((cama) => {
                                       const isCamaSelected =
@@ -417,49 +552,65 @@ export default function ConfiguracionPage() {
                                             })
                                           }
                                           className={cx(
-                                            "w-full rounded-xl border px-3 py-2 text-left transition",
-                                            isCamaSelected
-                                              ? "border-[var(--border-primary)] bg-[var(--bg-list)]"
-                                              : "border-transparent hover:bg-[var(--bg-list)]",
+                                            TREE_CARD_ROW,
+                                            isCamaSelected && TREE_CARD_ROW_SELECTED,
                                           )}
                                         >
-                                          <div className="text-sm text-[var(--text-primary)]">
-                                            {cama.data.nombre || "Cama"}
-                                          </div>
-                                          <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">
-                                            {cama.data.estado}
-                                            {" · "}
-                                            {cama.data.activo === false
-                                              ? "No visible"
-                                              : "Visible"}
+                                          <div className="min-w-0 flex-1 pl-1">
+                                            <div className="text-sm text-[var(--text-primary)]">
+                                              {cama.data.nombre || "Cama"}
+                                            </div>
+                                            <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                                              {cama.data.estado}
+                                              {" · "}
+                                              {cama.data.activo === false
+                                                ? "No visible"
+                                                : "Visible"}
+                                            </div>
                                           </div>
                                         </button>
                                       );
                                     })
                                   ) : (
-                                    <div className="px-3 py-2 text-xs text-[var(--text-tertiary)]">
+                                    <div className="rounded-xl border border-dashed border-[var(--border-secondary)] px-3 py-2 text-xs text-[var(--text-tertiary)]">
                                       Espacio común (sin camas)
                                     </div>
                                   )}
 
                                   {showCamasInTree ? (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setSelection({
-                                          kind: "add_cama",
-                                          plantaId: planta.id,
-                                          espacioId: espacio.id,
-                                        })
-                                      }
-                                      className="
-                                        w-full rounded-xl border border-dashed border-[var(--border-secondary)]
-                                        bg-transparent px-3 py-2 text-left text-sm text-[var(--text-secondary)]
-                                        transition hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]
-                                      "
-                                    >
-                                      + Agregar cama
-                                    </button>
+                                    treeAddForm?.kind === "cama" &&
+                                    treeAddForm.plantaId === planta.id &&
+                                    treeAddForm.espacioId === espacio.id ? (
+                                      <TreeAddNombreInline
+                                        nombre={treeAddNombre}
+                                        onNombreChange={setTreeAddNombre}
+                                        onConfirm={confirmTreeAdd}
+                                        onCancel={cancelTreeAdd}
+                                        busy={busy}
+                                        placeholder="Ej. Cama 1"
+                                      />
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => {
+                                          setTreeAddNombre("");
+                                          setTreeAddForm({
+                                            kind: "cama",
+                                            plantaId: planta.id,
+                                            espacioId: espacio.id,
+                                          });
+                                        }}
+                                        className="
+                                          w-full rounded-xl border border-dashed border-[var(--border-secondary)]
+                                          bg-[var(--bg-page)] px-3 py-2 text-left text-sm text-[var(--text-secondary)]
+                                          transition hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]
+                                          disabled:opacity-50
+                                        "
+                                      >
+                                        + Agregar cama
+                                      </button>
+                                    )
                                   ) : null}
                                 </div>
                               ) : null}
@@ -467,34 +618,66 @@ export default function ConfiguracionPage() {
                           );
                         })}
 
-                        <button
-                          type="button"
-                          onClick={() => setSelection({ kind: "add_espacio", plantaId: planta.id })}
-                          className="
-                            w-full rounded-xl border border-dashed border-[var(--border-secondary)]
-                            bg-transparent px-3 py-2 text-left text-sm text-[var(--text-secondary)]
-                            transition hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]
-                          "
-                        >
-                          + Agregar espacio
-                        </button>
+                        {treeAddForm?.kind === "espacio" && treeAddForm.plantaId === planta.id ? (
+                          <TreeAddNombreInline
+                            nombre={treeAddNombre}
+                            onNombreChange={setTreeAddNombre}
+                            onConfirm={confirmTreeAdd}
+                            onCancel={cancelTreeAdd}
+                            busy={busy}
+                            placeholder="Ej. Dormitorio A"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setTreeAddNombre("");
+                              setTreeAddForm({ kind: "espacio", plantaId: planta.id });
+                            }}
+                            className="
+                              w-full rounded-xl border border-dashed border-[var(--border-secondary)]
+                              bg-[var(--bg-page)] px-3 py-2 text-left text-sm text-[var(--text-secondary)]
+                              transition hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]
+                              disabled:opacity-50
+                            "
+                          >
+                            + Agregar espacio
+                          </button>
+                        )}
                       </div>
                     ) : null}
                   </div>
                 );
               })}
 
-              <button
-                type="button"
-                onClick={() => setSelection({ kind: "add_planta" })}
-                className="
-                  mt-2 w-full rounded-xl border border-dashed border-[var(--border-secondary)]
-                  bg-transparent px-3 py-2 text-left text-sm text-[var(--text-secondary)]
-                  transition hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]
-                "
-              >
-                + Agregar planta
-              </button>
+              {treeAddForm?.kind === "planta" ? (
+                <TreeAddNombreInline
+                  nombre={treeAddNombre}
+                  onNombreChange={setTreeAddNombre}
+                  onConfirm={confirmTreeAdd}
+                  onCancel={cancelTreeAdd}
+                  busy={busy}
+                  placeholder="Ej. Planta baja"
+                />
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setTreeAddNombre("");
+                    setTreeAddForm({ kind: "planta" });
+                  }}
+                  className="
+                    mt-1 w-full rounded-xl border border-dashed border-[var(--border-secondary)]
+                    bg-[var(--bg-page)] px-3 py-2 text-left text-sm text-[var(--text-secondary)]
+                    transition hover:bg-[var(--bg-list)] hover:text-[var(--text-primary)]
+                    disabled:opacity-50
+                  "
+                >
+                  + Agregar planta
+                </button>
+              )}
             </div>
           </div>
         </aside>
@@ -574,43 +757,6 @@ export default function ConfiguracionPage() {
                 setBusy={setBusy}
                 setError={setError}
                 onDeleted={() => setSelection({ kind: "hostel" })}
-                onDataSynced={syncData}
-              />
-            ) : null}
-
-            {selection.kind === "add_planta" ? (
-              <AddPlantaPanel
-                hostelId={hostelId}
-                existingPlantas={plantas}
-                busy={busy}
-                setBusy={setBusy}
-                setError={setError}
-                onCreated={() => setSelection({ kind: "hostel" })}
-                onDataSynced={syncData}
-              />
-            ) : null}
-
-            {selection.kind === "add_espacio" ? (
-              <AddEspacioPanel
-                hostelId={hostelId}
-                planta={selectedPlanta}
-                busy={busy}
-                setBusy={setBusy}
-                setError={setError}
-                onCreated={() => setSelection({ kind: "hostel" })}
-                onDataSynced={syncData}
-              />
-            ) : null}
-
-            {selection.kind === "add_cama" ? (
-              <AddCamaPanel
-                hostelId={hostelId}
-                planta={selectedPlanta}
-                espacio={selectedEspacio}
-                busy={busy}
-                setBusy={setBusy}
-                setError={setError}
-                onCreated={() => setSelection({ kind: "hostel" })}
                 onDataSynced={syncData}
               />
             ) : null}
@@ -1165,277 +1311,3 @@ function CamaPanel({
     </div>
   );
 }
-
-function AddPlantaPanel({
-  hostelId,
-  existingPlantas,
-  busy,
-  setBusy,
-  setError,
-  onCreated,
-  onDataSynced,
-}: {
-  hostelId: string;
-  existingPlantas: PlantaNode[];
-  busy: boolean;
-  setBusy: (v: boolean) => void;
-  setError: (v: string | null) => void;
-  onCreated: () => void;
-  onDataSynced?: () => void;
-}) {
-  const [nombre, setNombre] = useState("");
-  const [orden, setOrden] = useState("");
-
-  useEffect(() => {
-    const maxOrden = existingPlantas.reduce((max, p) => Math.max(max, p.data.orden ?? 0), 0);
-    setOrden(String(maxOrden + 1));
-  }, [existingPlantas]);
-
-  async function onCreate() {
-    setBusy(true);
-    setError(null);
-    try {
-      await postHostelWrite({
-        op: "addPlanta",
-        payload: {
-          nombre: nombre.trim() || "Nueva planta",
-          orden: asNumber(orden, 0),
-        } satisfies Planta,
-      });
-      onDataSynced?.();
-      onCreated();
-    } catch (e: unknown) {
-      setError(errorMessage(e, "Error creando planta"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Agregar planta</h2>
-        <p className="mt-1 text-sm text-[var(--text-tertiary)]">Formulario inline simple.</p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Field label="Nombre">
-          <TextInput value={nombre} onChange={(e) => setNombre(e.target.value)} />
-        </Field>
-        <Field label="Orden">
-          <TextInput value={orden} onChange={(e) => setOrden(e.target.value)} />
-        </Field>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <PrimaryButton type="button" onClick={() => void onCreate()} disabled={busy}>
-          {busy ? "Creando..." : "Confirmar"}
-        </PrimaryButton>
-      </div>
-    </div>
-  );
-}
-
-function AddEspacioPanel({
-  hostelId,
-  planta,
-  busy,
-  setBusy,
-  setError,
-  onCreated,
-  onDataSynced,
-}: {
-  hostelId: string;
-  planta: PlantaNode | null;
-  busy: boolean;
-  setBusy: (v: boolean) => void;
-  setError: (v: string | null) => void;
-  onCreated: () => void;
-  onDataSynced?: () => void;
-}) {
-  const [nombre, setNombre] = useState("");
-  const [tipo, setTipo] = useState<EspacioTipo>("compartido");
-  const [precio, setPrecio] = useState("0");
-  const [activo, setActivo] = useState(true);
-
-  async function onCreate() {
-    if (!planta) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await postHostelWrite({
-        op: "addEspacio",
-        payload: {
-          plantaId: planta.id,
-          nombre: nombre.trim() || "Nuevo espacio",
-          tipo,
-          precio: asNumber(precio, 0),
-          activo,
-        } satisfies Espacio & { plantaId: string },
-      });
-      onDataSynced?.();
-      onCreated();
-    } catch (e: unknown) {
-      setError(errorMessage(e, "Error creando espacio"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!planta) {
-    return (
-      <div className="text-sm text-[var(--text-tertiary)]">
-        Planta no encontrada (puede haber sido eliminada).
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Agregar espacio</h2>
-        <p className="mt-1 text-sm text-[var(--text-tertiary)]">
-          Planta: <span className="font-medium">{planta.data.nombre || planta.id}</span>
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Field label="Nombre">
-          <TextInput value={nombre} onChange={(e) => setNombre(e.target.value)} />
-        </Field>
-        <Field label="Tipo">
-          <Select value={tipo} onChange={(e) => setTipo(e.target.value as EspacioTipo)}>
-            {ESPACIO_TIPOS.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Precio (por noche)">
-          <TextInput
-            inputMode="decimal"
-            value={precio}
-            onChange={(e) => setPrecio(e.target.value)}
-          />
-        </Field>
-        <div className="flex items-end">
-          <Toggle checked={activo} onChange={setActivo} label={activo ? "Activo" : "Inactivo"} />
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <PrimaryButton type="button" onClick={() => void onCreate()} disabled={busy}>
-          {busy ? "Creando..." : "Confirmar"}
-        </PrimaryButton>
-      </div>
-    </div>
-  );
-}
-
-function AddCamaPanel({
-  hostelId,
-  planta,
-  espacio,
-  busy,
-  setBusy,
-  setError,
-  onCreated,
-  onDataSynced,
-}: {
-  hostelId: string;
-  planta: PlantaNode | null;
-  espacio: EspacioNode | null;
-  busy: boolean;
-  setBusy: (v: boolean) => void;
-  setError: (v: string | null) => void;
-  onCreated: () => void;
-  onDataSynced?: () => void;
-}) {
-  const [nombre, setNombre] = useState("");
-  const [estado, setEstado] = useState<CamaEstado>("libre");
-  const [visible, setVisible] = useState(true);
-
-  async function onCreate() {
-    if (!planta || !espacio) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await postHostelWrite({
-        op: "addCama",
-        payload: {
-          plantaId: planta.id,
-          espacioId: espacio.id,
-          nombre: nombre.trim() || "Nueva cama",
-          estado,
-          activo: visible,
-        },
-      });
-      onDataSynced?.();
-      onCreated();
-    } catch (e: unknown) {
-      setError(errorMessage(e, "Error creando cama"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!planta || !espacio) {
-    return (
-      <div className="text-sm text-[var(--text-tertiary)]">
-        Espacio no encontrado (puede haber sido eliminado).
-      </div>
-    );
-  }
-
-  if (espacio.data.tipo === "comun") {
-    return (
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Agregar cama</h2>
-        <div className="text-sm text-[var(--text-tertiary)]">
-          Este espacio es <span className="font-medium">común</span> y no admite camas.
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Agregar cama</h2>
-        <p className="mt-1 text-sm text-[var(--text-tertiary)]">
-          {planta.data.nombre || planta.id} · {espacio.data.nombre || espacio.id}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Field label="Nombre">
-          <TextInput value={nombre} onChange={(e) => setNombre(e.target.value)} />
-        </Field>
-        <Field label="Estado">
-          <Select value={estado} onChange={(e) => setEstado(e.target.value as CamaEstado)}>
-            {CAMA_ESTADOS.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <div className="flex items-end">
-          <Toggle
-            checked={visible}
-            onChange={setVisible}
-            label={visible ? "Visible para reservas" : "Oculta para reservas"}
-          />
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <PrimaryButton type="button" onClick={() => void onCreate()} disabled={busy}>
-          {busy ? "Creando..." : "Confirmar"}
-        </PrimaryButton>
-      </div>
-    </div>
-  );
-}
-
