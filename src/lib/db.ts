@@ -17,6 +17,7 @@ export type Hostel = {
 export type Planta = {
   nombre: string;
   orden: number;
+  color?: string;
 };
 
 export type EspacioTipo = "privada" | "compartido" | "comun";

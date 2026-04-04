@@ -43,6 +43,24 @@ function defaultCamaEstado(): CamaEstado {
   return "libre";
 }
 
+const PLANTA_COLORES = [
+  { id: "teal", bg: "#5eead4", text: "#134e4a", bgSuave: "#99f6e4", bgMuySuave: "#ccfbf1" },
+  { id: "azul", bg: "#60a5fa", text: "#1e3a8a", bgSuave: "#93c5fd", bgMuySuave: "#bfdbfe" },
+  { id: "verde", bg: "#4ade80", text: "#14532d", bgSuave: "#86efac", bgMuySuave: "#bbf7d0" },
+  { id: "amarillo", bg: "#fde047", text: "#713f12", bgSuave: "#fef08a", bgMuySuave: "#fef9c3" },
+  { id: "salmon", bg: "#fb923c", text: "#7c2d12", bgSuave: "#fdba74", bgMuySuave: "#fed7aa" },
+  { id: "ambar", bg: "#fbbf24", text: "#78350f", bgSuave: "#fcd34d", bgMuySuave: "#fde68a" },
+  { id: "lavanda", bg: "#a78bfa", text: "#2e1065", bgSuave: "#c4b5fd", bgMuySuave: "#ddd6fe" },
+  { id: "rosa", bg: "#f472b6", text: "#500724", bgSuave: "#f9a8d4", bgMuySuave: "#fbcfe8" },
+  { id: "violeta", bg: "#818cf8", text: "#1e1b4b", bgSuave: "#a5b4fc", bgMuySuave: "#c7d2fe" },
+] as const;
+
+type PlantaColorId = (typeof PLANTA_COLORES)[number]["id"];
+
+function getPlantaColor(colorId?: string): (typeof PLANTA_COLORES)[number] | null {
+  return PLANTA_COLORES.find((c) => c.id === colorId) ?? null;
+}
+
 const TREE_CARD_ROW =
   "flex w-full items-center gap-2 rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] px-3 py-2 text-left transition hover:bg-[var(--bg-list)]";
 const TREE_CARD_ROW_SELECTED = "border-[var(--border-primary)] bg-[var(--bg-list)]";
@@ -300,6 +318,11 @@ export default function ConfiguracionPage() {
     return (camasByEspacio[key] ?? []).find((c) => c.id === selectedCamaId) ?? null;
   }, [camasByEspacio, selectedCamaId, selectedEspacioId, selectedPlantaId]);
 
+  const panelColor = useMemo(() => {
+    if (selection.kind === "hostel") return null;
+    return getPlantaColor(selectedPlanta?.data.color);
+  }, [selection.kind, selectedPlanta]);
+
   useEffect(() => {
     setSelection((prev) => {
       if (prev.kind === "planta") {
@@ -420,13 +443,15 @@ export default function ConfiguracionPage() {
       <div
         className="
           grid gap-6
-          rounded-2xl border border-[var(--border-secondary)] bg-[var(--bg-component)] p-4 shadow-sm
+          rounded-2xl border border-[var(--border-secondary)] bg-[var(--bg-component)] p-4
+          shadow-lg
         "
         style={{ gridTemplateColumns: "260px 1fr" }}
       >
         <aside
           className="
             rounded-2xl border border-[var(--border-secondary)] bg-[var(--bg-sidebar)] p-3
+            shadow-md
           "
         >
           <button
@@ -452,6 +477,7 @@ export default function ConfiguracionPage() {
 
             <div className="space-y-2">
               {plantas.map((planta) => {
+                const plantaColorObj = getPlantaColor(planta.data.color);
                 const isExpanded = !!expandedPlantas[planta.id];
                 const isSelected = selection.kind === "planta" && selection.plantaId === planta.id;
                 const espacios = espaciosByPlanta[planta.id] ?? [];
@@ -465,20 +491,42 @@ export default function ConfiguracionPage() {
                         setSelection({ kind: "planta", plantaId: planta.id });
                       }}
                       className={cx(TREE_CARD_ROW, isSelected && TREE_CARD_ROW_SELECTED)}
+                      style={
+                        plantaColorObj
+                          ? {
+                              background: plantaColorObj.bg,
+                              border: "none",
+                              color: plantaColorObj.text,
+                            }
+                          : undefined
+                      }
                       aria-expanded={isExpanded}
                       aria-label={isExpanded ? "Colapsar planta" : "Expandir planta"}
                     >
                       <span
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-base text-[var(--text-secondary)]"
+                        className={cx(
+                          "inline-flex h-7 w-7 shrink-0 items-center justify-center text-base",
+                          plantaColorObj ? "opacity-70" : "text-[var(--text-secondary)]",
+                        )}
                         aria-hidden
                       >
                         {isExpanded ? "▾" : "▸"}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-[var(--text-primary)]">
+                        <div
+                          className={cx(
+                            "text-sm font-medium",
+                            !plantaColorObj && "text-[var(--text-primary)]",
+                          )}
+                        >
                           {planta.data.nombre || "Planta"}
                         </div>
-                        <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                        <div
+                          className={cx(
+                            "mt-0.5 text-xs",
+                            plantaColorObj ? "opacity-75" : "text-[var(--text-tertiary)]",
+                          )}
+                        >
                           Orden: {planta.data.orden}
                         </div>
                       </div>
@@ -510,20 +558,42 @@ export default function ConfiguracionPage() {
                                   });
                                 }}
                                 className={cx(TREE_CARD_ROW, isEspacioSelected && TREE_CARD_ROW_SELECTED)}
+                                style={
+                                  plantaColorObj
+                                    ? {
+                                        background: plantaColorObj.bgSuave,
+                                        border: "none",
+                                        color: plantaColorObj.text,
+                                      }
+                                    : undefined
+                                }
                                 aria-expanded={isExpandedEspacio}
                                 aria-label={isExpandedEspacio ? "Colapsar espacio" : "Expandir espacio"}
                               >
                                 <span
-                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-base text-[var(--text-secondary)]"
+                                  className={cx(
+                                    "inline-flex h-7 w-7 shrink-0 items-center justify-center text-base",
+                                    plantaColorObj ? "opacity-70" : "text-[var(--text-secondary)]",
+                                  )}
                                   aria-hidden
                                 >
                                   {isExpandedEspacio ? "▾" : "▸"}
                                 </span>
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-medium text-[var(--text-primary)]">
+                                  <div
+                                    className={cx(
+                                      "text-sm font-medium",
+                                      !plantaColorObj && "text-[var(--text-primary)]",
+                                    )}
+                                  >
                                     {espacio.data.nombre || "Espacio"}
                                   </div>
-                                  <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                                  <div
+                                    className={cx(
+                                      "mt-0.5 text-xs",
+                                      plantaColorObj ? "opacity-75" : "text-[var(--text-tertiary)]",
+                                    )}
+                                  >
                                     {espacio.data.tipo} · ${espacio.data.precio ?? 0}
                                   </div>
                                 </div>
@@ -555,12 +625,31 @@ export default function ConfiguracionPage() {
                                             TREE_CARD_ROW,
                                             isCamaSelected && TREE_CARD_ROW_SELECTED,
                                           )}
+                                          style={
+                                            plantaColorObj
+                                              ? {
+                                                  background: plantaColorObj.bgMuySuave,
+                                                  border: "none",
+                                                  color: plantaColorObj.text,
+                                                }
+                                              : undefined
+                                          }
                                         >
                                           <div className="min-w-0 flex-1 pl-1">
-                                            <div className="text-sm text-[var(--text-primary)]">
+                                            <div
+                                              className={cx(
+                                                "text-sm",
+                                                !plantaColorObj && "text-[var(--text-primary)]",
+                                              )}
+                                            >
                                               {cama.data.nombre || "Cama"}
                                             </div>
-                                            <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                                            <div
+                                              className={cx(
+                                                "mt-0.5 text-xs",
+                                                plantaColorObj ? "opacity-75" : "text-[var(--text-tertiary)]",
+                                              )}
+                                            >
                                               {cama.data.estado}
                                               {" · "}
                                               {cama.data.activo === false
@@ -687,6 +776,16 @@ export default function ConfiguracionPage() {
             rounded-2xl border border-[var(--border-secondary)] bg-[var(--bg-component)] p-5 shadow-sm
           "
         >
+          {panelColor ? (
+            <div
+              style={{
+                height: 4,
+                borderRadius: "8px 8px 0 0",
+                background: panelColor.bg,
+                marginBottom: 16,
+              }}
+            />
+          ) : null}
           <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
@@ -855,10 +954,16 @@ function PlantaPanel({
 }) {
   const [nombre, setNombre] = useState("");
   const [orden, setOrden] = useState("0");
+  const [color, setColor] = useState<PlantaColorId | "">("");
 
   useEffect(() => {
     setNombre(planta?.data.nombre ?? "");
     setOrden(String(planta?.data.orden ?? 0));
+    const raw = planta?.data.color?.trim() ?? "";
+    const next: PlantaColorId | "" = PLANTA_COLORES.some((c) => c.id === raw)
+      ? (raw as PlantaColorId)
+      : "";
+    setColor(next);
   }, [planta]);
 
   async function onSave() {
@@ -872,6 +977,7 @@ function PlantaPanel({
           plantaId: planta.id,
           nombre: nombre.trim(),
           orden: asNumber(orden, planta.data.orden ?? 0),
+          color: color.trim(),
         } satisfies Planta & { plantaId: string },
       });
       onDataSynced?.();
@@ -928,6 +1034,50 @@ function PlantaPanel({
             onChange={(e) => setOrden(e.target.value)}
           />
         </Field>
+        <div className="lg:col-span-2">
+          <Field label="Color de planta">
+            <div className="flex flex-wrap gap-2">
+              {PLANTA_COLORES.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setColor(c.id)}
+                  title={c.id}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: c.bg,
+                    border:
+                      color === c.id ? `3px solid ${c.text}` : "2px solid transparent",
+                    cursor: "pointer",
+                    outline: "none",
+                    transition: "border 0.15s",
+                  }}
+                />
+              ))}
+              {color ? (
+                <button
+                  type="button"
+                  onClick={() => setColor("")}
+                  title="Sin color"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: "var(--bg-page)",
+                    border: "1.5px dashed var(--border-secondary)",
+                    cursor: "pointer",
+                    fontSize: 15,
+                    color: "var(--text-tertiary)",
+                  }}
+                >
+                  ✕
+                </button>
+              ) : null}
+            </div>
+          </Field>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

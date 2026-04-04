@@ -5,6 +5,17 @@ export const runtime = "nodejs";
 
 const ESPACIO_TIPOS = new Set(["privada", "compartido", "comun"]);
 const CAMA_ESTADOS = new Set(["libre", "ocupada", "bloqueada", "fuera_de_servicio"]);
+const PLANTA_COLOR_IDS = new Set([
+  "azul",
+  "verde",
+  "amarillo",
+  "salmon",
+  "ambar",
+  "lavanda",
+  "violeta",
+  "rosa",
+  "teal",
+]);
 
 function asString(v: unknown, field: string): string {
   if (typeof v !== "string") throw new Error(`${field} inválido`);
@@ -71,9 +82,14 @@ export async function POST(request: Request) {
         const x = p as Record<string, unknown>;
         const plantaId = asNonEmptyString(x.plantaId, "plantaId");
         const nombrePl = typeof x.nombre === "string" ? x.nombre.trim() : "";
+        const colorRaw = typeof x.color === "string" ? x.color.trim() : "";
+        if (colorRaw !== "" && !PLANTA_COLOR_IDS.has(colorRaw)) {
+          throw new Error("color de planta inválido");
+        }
         await hRef.collection("plantas").doc(plantaId).update({
           nombre: nombrePl || "Planta",
           orden: asNumber(x.orden, "orden"),
+          color: colorRaw,
         });
         return NextResponse.json({ ok: true });
       }
