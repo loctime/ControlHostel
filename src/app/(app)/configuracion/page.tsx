@@ -533,7 +533,10 @@ export default function ConfiguracionPage() {
                     </button>
 
                     {isExpanded ? (
-                      <div className="ml-2 mt-2 space-y-2 border-l border-[var(--border-secondary)] pl-3">
+                      <div
+                        className="ml-2 mt-2 space-y-2 border-l-[3px] border-solid border-[var(--border-secondary)] pl-3"
+                        style={plantaColorObj ? { borderColor: plantaColorObj.text } : undefined}
+                      >
                         {espacios.map((espacio) => {
                           const isEspacioSelected =
                             selection.kind === "espacio" &&
@@ -600,7 +603,10 @@ export default function ConfiguracionPage() {
                               </button>
 
                               {isExpandedEspacio ? (
-                                <div className="ml-2 mt-2 space-y-2 border-l border-[var(--border-secondary)] pl-3">
+                                <div
+                                  className="ml-2 mt-2 space-y-2 border-l-[2px] border-solid border-[var(--border-secondary)] pl-3"
+                                  style={plantaColorObj ? { borderColor: plantaColorObj.text } : undefined}
+                                >
                                   {showCamasInTree ? (
                                     camas.map((cama) => {
                                       const isCamaSelected =
