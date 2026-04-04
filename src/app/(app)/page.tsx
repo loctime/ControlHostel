@@ -1,15 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { onSnapshot, orderBy, query, updateDoc } from "firebase/firestore";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Timestamp, updateDoc } from "firebase/firestore";
 import type { Cama, Espacio, Planta, Reserva, ReservaEstado } from "@/lib/db";
-import {
-  camasCollection,
-  espaciosCollection,
-  plantasCollection,
-  reservaRef,
-  reservasCollection,
-} from "@/lib/db";
+import { reservaRef } from "@/lib/db";
 import {
   NuevaReservaModal,
   type CamaNode as ModalCamaNode,
@@ -17,7 +11,7 @@ import {
   type ReservaNode as ModalReservaNode,
 } from "@/components/NuevaReservaModal";
 import { useHostel } from "@/context/HostelContext";
-import { logFirestoreListenError, userFacingFirestoreError } from "@/lib/firestore-ui";
+import { userFacingFirestoreError } from "@/lib/firestore-ui";
 
 type Id = string;
 type PlantaNode = { id: Id; data: Planta };
@@ -93,6 +87,56 @@ const RESERVA_ACTIVA: ReadonlySet<ReservaEstado> = new Set([
   "en_curso",
 ]);
 
+const PANEL_POLL_MS = 5000;
+
+type PanelSnapshot = {
+  plantas: PlantaNode[];
+  espaciosByPlanta: Record<Id, EspacioNode[]>;
+  camasByEspacio: Record<EspacioKey, CamaNode[]>;
+  reservas: ReservaNode[];
+};
+
+/** Lee plantas/espacios/camas/reservas vía Admin SDK (no depende de reglas cliente). */
+async function loadPanelSnapshotFromApi(): Promise<PanelSnapshot> {
+  const res = await fetch("/api/hostels/snapshot", { credentials: "same-origin" });
+  const json = (await res.json()) as {
+    error?: string;
+    plantas?: PlantaNode[];
+    espaciosByPlanta?: Record<Id, EspacioNode[]>;
+    camasByEspacio?: Record<string, CamaNode[]>;
+    reservas?: Array<{
+      id: string;
+      data: Record<string, unknown> & { checkinMillis: number; checkoutMillis: number };
+    }>;
+  };
+
+  if (!res.ok) {
+    throw new Error(json.error ?? `Error del servidor (${res.status})`);
+  }
+  if (!json.plantas || !json.espaciosByPlanta || !json.camasByEspacio || !json.reservas) {
+    throw new Error("Respuesta del servidor incompleta");
+  }
+
+  const reservas: ReservaNode[] = json.reservas.map((r) => {
+    const { checkinMillis, checkoutMillis, ...rest } = r.data;
+    return {
+      id: r.id,
+      data: {
+        ...rest,
+        checkin: Timestamp.fromMillis(Number(checkinMillis)),
+        checkout: Timestamp.fromMillis(Number(checkoutMillis)),
+      } as Reserva,
+    };
+  });
+
+  return {
+    plantas: json.plantas,
+    espaciosByPlanta: json.espaciosByPlanta,
+    camasByEspacio: json.camasByEspacio as Record<EspacioKey, CamaNode[]>,
+    reservas,
+  };
+}
+
 export default function PanelPage() {
   const { hostelId, loading: hostelLoading } = useHostel();
   if (hostelLoading) return null;
@@ -117,130 +161,46 @@ export default function PanelPage() {
 
   const [newOpen, setNewOpen] = useState(false);
 
-  const unsubEspaciosByPlanta = useRef(new Map<Id, () => void>());
-  const unsubCamasByEspacio = useRef(new Map<EspacioKey, () => void>());
+  const applySnapshot = useCallback((data: PanelSnapshot) => {
+      setPlantas(data.plantas);
+      setEspaciosByPlanta(data.espaciosByPlanta);
+      setCamasByEspacio(data.camasByEspacio);
+      setReservas(data.reservas);
+      setError(null);
+    },
+    [],
+  );
 
   useEffect(() => {
-    const espaciosMap = unsubEspaciosByPlanta.current;
-    const camasMap = unsubCamasByEspacio.current;
+    if (!hostelId) return;
 
-    const qPlantas = query(plantasCollection(hostelId), orderBy("orden", "asc"));
-    const unsubPlantas = onSnapshot(
-      qPlantas,
-      (snap) => {
-        setError(null);
-        const next = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
-        setPlantas(next);
+    let cancelled = false;
 
-        const plantaIds = new Set(next.map((p) => p.id));
+    async function tick() {
+      try {
+        const data = await loadPanelSnapshotFromApi();
+        if (cancelled) return;
+        applySnapshot(data);
+      } catch (e) {
+        if (cancelled) return;
+        console.error("[Panel] snapshot API", e);
+        setError(userFacingFirestoreError(e, "Panel"));
+      }
+    }
 
-        for (const [plantaId, unsub] of espaciosMap.entries()) {
-          if (!plantaIds.has(plantaId)) {
-            unsub();
-            espaciosMap.delete(plantaId);
-            setEspaciosByPlanta((prev) => {
-              const copy = { ...prev };
-              delete copy[plantaId];
-              return copy;
-            });
-          }
-        }
-
-        for (const plantaId of plantaIds) {
-          if (espaciosMap.has(plantaId)) continue;
-
-          const qEspacios = query(
-            espaciosCollection(hostelId, plantaId),
-            orderBy("nombre", "asc"),
-          );
-          const unsubEspacios = onSnapshot(
-            qEspacios,
-            (snapEspacios) => {
-              setError(null);
-              const nextEspacios = snapEspacios.docs.map((d) => ({ id: d.id, data: d.data() }));
-              setEspaciosByPlanta((prev) => ({ ...prev, [plantaId]: nextEspacios }));
-
-              const nextKeys = new Set(
-                nextEspacios.map((e) => `${plantaId}/${e.id}` as EspacioKey),
-              );
-
-              for (const [key, unsubCamas] of camasMap.entries()) {
-                if (!key.startsWith(`${plantaId}/`)) continue;
-                if (!nextKeys.has(key)) {
-                  unsubCamas();
-                  camasMap.delete(key);
-                  setCamasByEspacio((prev) => {
-                    const copy = { ...prev };
-                    delete copy[key];
-                    return copy;
-                  });
-                }
-              }
-
-              for (const espacio of nextEspacios) {
-                const key = `${plantaId}/${espacio.id}` as EspacioKey;
-                if (camasMap.has(key)) continue;
-
-                const qCamas = query(
-                  camasCollection(hostelId, plantaId, espacio.id),
-                  orderBy("nombre", "asc"),
-                );
-                const unsubCamas = onSnapshot(
-                  qCamas,
-                  (snapCamas) => {
-                    setError(null);
-                    const nextCamas = snapCamas.docs.map((d) => {
-                      const raw = d.data() as Cama & { activo?: boolean };
-                      return { id: d.id, data: raw };
-                    });
-                    setCamasByEspacio((prev) => ({ ...prev, [key]: nextCamas }));
-                  },
-                  (e) => {
-                    logFirestoreListenError("panel", "camas", e);
-                    setError(userFacingFirestoreError(e, "Camas"));
-                  },
-                );
-
-                camasMap.set(key, unsubCamas);
-              }
-            },
-            (e) => {
-              logFirestoreListenError("panel", "espacios", e);
-              setError(userFacingFirestoreError(e, "Espacios"));
-            },
-          );
-
-          espaciosMap.set(plantaId, unsubEspacios);
-        }
-      },
-      (e) => {
-        logFirestoreListenError("panel", "plantas", e);
-        setError(userFacingFirestoreError(e, "Plantas"));
-      },
-    );
-
-    const qReservas = query(reservasCollection(hostelId), orderBy("checkin", "desc"));
-    const unsubReservas = onSnapshot(
-      qReservas,
-      (snap) => {
-        setError(null);
-        setReservas(snap.docs.map((d) => ({ id: d.id, data: d.data() })));
-      },
-      (e) => {
-        logFirestoreListenError("panel", "reservas", e);
-        setError(userFacingFirestoreError(e, "Reservas"));
-      },
-    );
+    void tick();
+    const intervalId = window.setInterval(() => void tick(), PANEL_POLL_MS);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
 
     return () => {
-      unsubPlantas();
-      unsubReservas();
-      for (const u of espaciosMap.values()) u();
-      for (const u of camasMap.values()) u();
-      espaciosMap.clear();
-      camasMap.clear();
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVis);
     };
-  }, [hostelId]);
+  }, [applySnapshot, hostelId]);
 
   const espacioNameByKey = useMemo(() => {
     const map = new Map<EspacioKey, { plantaName: string; espacioName: string }>();
@@ -369,6 +329,8 @@ export default function PanelPage() {
     setError(null);
     try {
       await updateDoc(reservaRef(hostelId, reservaId), { estado: next } satisfies Partial<Reserva>);
+      const data = await loadPanelSnapshotFromApi();
+      applySnapshot(data);
     } catch (e: unknown) {
       setError(userFacingFirestoreError(e, "Actualizar reserva"));
     } finally {

@@ -6,9 +6,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // hostelId efectivo: sin doc, sin campo, null o string vacío => "sin hostel" (permitir /setup).
-    // El cliente debe guardar null (no ""): en reglas Firestore, "" == null es falso y rompe hasNoHostelAssigned.
-    // IMPORTANTE: si usuarios/{uid} no existe, NO acceder a .data (falla la regla → permission-denied).
     function userHostelIdFromUsuarioDoc() {
       let d = get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
       return !d.exists ? null
@@ -17,8 +14,6 @@ service cloud.firestore {
         : d.data.hostelId;
     }
 
-    // Estado de usuarios/{uid} tras aplicar la petición (batch/transacción o escritura simple).
-    // Necesario para allow create en hostels: en un batch, get() no ve el setDoc de usuario todavía.
     function userHostelIdFromUsuarioAfterRequest() {
       let d = getAfter(/databases/$(database)/documents/usuarios/$(request.auth.uid));
       return !d.exists ? null
@@ -35,24 +30,34 @@ service cloud.firestore {
       return isSignedIn() && userHostelId() == hostelId;
     }
 
-    // Documento del usuario: usuarios/{uid}
     match /usuarios/{uid} {
       allow read: if isSignedIn() && request.auth.uid == uid;
-      // Setup inicial: el usuario se asigna su hostelId (y puede actualizarlo si hace falta).
       allow create, update: if isSignedIn() && request.auth.uid == uid;
       allow delete: if false;
     }
 
-    // Hostels y subcolecciones
+    // Rutas explícitas (evita problemas de list/query con {document=**} anidado).
     match /hostels/{hostelId} {
-      // Crear hostel: sin hostel asignado tras esta petición (getAfter → coherente con writeBatch + set usuario).
       allow create: if isSignedIn() && userHostelIdFromUsuarioAfterRequest() == null;
-
-      // Lectura/escritura solo dentro del hostel asignado al usuario.
       allow read, update, delete: if isUsersHostel(hostelId);
 
-      // Subcolecciones del hostel (cualquier profundidad)
-      match /{document=**} {
+      match /plantas/{plantaId} {
+        allow read, write: if isUsersHostel(hostelId);
+
+        match /espacios/{espacioId} {
+          allow read, write: if isUsersHostel(hostelId);
+
+          match /camas/{camaId} {
+            allow read, write: if isUsersHostel(hostelId);
+          }
+        }
+      }
+
+      match /reservas/{reservaId} {
+        allow read, write: if isUsersHostel(hostelId);
+      }
+
+      match /bloqueos/{bloqueoId} {
         allow read, write: if isUsersHostel(hostelId);
       }
     }
