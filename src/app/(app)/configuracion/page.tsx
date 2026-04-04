@@ -791,7 +791,10 @@ export default function ConfiguracionPage() {
                 Configuración
               </h1>
               <p className="mt-1 text-sm text-[var(--text-tertiary)]">
-                Hostel: <span className="font-medium">{hostelId}</span>
+                Hostel:{" "}
+                <span className="font-medium text-[var(--text-primary)]">
+                  {hostel?.nombre?.trim() || "Sin nombre"}
+                </span>
               </p>
             </div>
           </div>
@@ -990,7 +993,7 @@ function PlantaPanel({
   async function onDelete() {
     if (!planta) return;
     const ok = confirm(
-      `¿Eliminar la planta "${planta.data.nombre || planta.id}"?\n\nEsto eliminará su documento. (Si hay subcolecciones, Firestore no las borra automáticamente.)`,
+      `¿Eliminar la planta "${planta.data.nombre?.trim() || "sin nombre"}"?\n\nEsto eliminará su documento. (Si hay subcolecciones, Firestore no las borra automáticamente.)`,
     );
     if (!ok) return;
 
@@ -1018,8 +1021,9 @@ function PlantaPanel({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Planta</h2>
-        <p className="mt-1 text-sm text-[var(--text-tertiary)]">ID: {planta.id}</p>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+          {planta.data.nombre?.trim() ? planta.data.nombre : "Planta"}
+        </h2>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1180,7 +1184,7 @@ function EspacioPanel({
   async function onDelete() {
     if (!planta || !espacio) return;
     const ok = confirm(
-      `¿Eliminar el espacio "${espacio.data.nombre || espacio.id}"?\n\nEsto eliminará su documento. (Si hay subcolecciones, Firestore no las borra automáticamente.)`,
+      `¿Eliminar el espacio "${espacio.data.nombre?.trim() || "sin nombre"}"?\n\nEsto eliminará su documento. (Si hay subcolecciones, Firestore no las borra automáticamente.)`,
     );
     if (!ok) return;
 
@@ -1213,10 +1217,12 @@ function EspacioPanel({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Espacio</h2>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+          {espacio.data.nombre?.trim() ? espacio.data.nombre : "Espacio"}
+        </h2>
         <p className="mt-1 text-sm text-[var(--text-tertiary)]">
-          Planta: <span className="font-medium">{planta.data.nombre || planta.id}</span> · ID:{" "}
-          {espacio.id}
+          Planta:{" "}
+          <span className="font-medium">{planta.data.nombre?.trim() || "Sin nombre"}</span>
         </p>
       </div>
 
@@ -1276,7 +1282,6 @@ function EspacioPanel({
                       <div className="text-sm font-medium text-[var(--text-primary)]">
                         {c.data.nombre || "Cama"}
                       </div>
-                      <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">ID: {c.id}</div>
                     </div>
                     <div>
                       <Select
@@ -1391,7 +1396,7 @@ function CamaPanel({
 
   async function onDelete() {
     if (!planta || !espacio || !cama) return;
-    const ok = confirm(`¿Eliminar la cama "${cama.data.nombre || cama.id}"?`);
+    const ok = confirm(`¿Eliminar la cama "${cama.data.nombre?.trim() || "sin número"}"?`);
     if (!ok) return;
 
     setBusy(true);
@@ -1421,9 +1426,11 @@ function CamaPanel({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Cama</h2>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+          {cama.data.nombre?.trim() ? cama.data.nombre : "Cama"}
+        </h2>
         <p className="mt-1 text-sm text-[var(--text-tertiary)]">
-          {planta.data.nombre || planta.id} · {espacio.data.nombre || espacio.id} · ID: {cama.id}
+          {planta.data.nombre?.trim() || "Planta"} · {espacio.data.nombre?.trim() || "Espacio"}
         </p>
       </div>
 
