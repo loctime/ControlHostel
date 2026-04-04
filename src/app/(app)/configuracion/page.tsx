@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { addDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import type {
   Cama,
   CamaEstado,
@@ -10,15 +9,7 @@ import type {
   Hostel,
   Planta,
 } from "@/lib/db";
-import {
-  camaRef,
-  camasCollection,
-  espacioRef,
-  espaciosCollection,
-  hostelRef,
-  plantaRef,
-  plantasCollection,
-} from "@/lib/db";
+import { postHostelWrite } from "@/lib/hostel-config-api";
 import { useHostelSnapshot } from "@/lib/hostel-snapshot-client";
 
 type Id = string;
@@ -657,10 +648,13 @@ function HostelPanel({
     setBusy(true);
     setError(null);
     try {
-      await updateDoc(hostelRef(hostelId), {
-        nombre: nombre.trim(),
-        direccion: direccion.trim(),
-      } satisfies Hostel);
+      await postHostelWrite({
+        op: "updateHostel",
+        payload: {
+          nombre: nombre.trim(),
+          direccion: direccion.trim(),
+        } satisfies Hostel,
+      });
       onDataSynced?.();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error guardando hostel"));
@@ -726,10 +720,14 @@ function PlantaPanel({
     setBusy(true);
     setError(null);
     try {
-      await updateDoc(plantaRef(hostelId, planta.id), {
-        nombre: nombre.trim(),
-        orden: asNumber(orden, planta.data.orden ?? 0),
-      } satisfies Planta);
+      await postHostelWrite({
+        op: "updatePlanta",
+        payload: {
+          plantaId: planta.id,
+          nombre: nombre.trim(),
+          orden: asNumber(orden, planta.data.orden ?? 0),
+        } satisfies Planta & { plantaId: string },
+      });
       onDataSynced?.();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error guardando planta"));
@@ -748,7 +746,7 @@ function PlantaPanel({
     setBusy(true);
     setError(null);
     try {
-      await deleteDoc(plantaRef(hostelId, planta.id));
+      await postHostelWrite({ op: "deletePlanta", payload: { plantaId: planta.id } });
       onDataSynced?.();
       onDeleted();
     } catch (e: unknown) {
@@ -860,21 +858,22 @@ function EspacioPanel({
     setBusy(true);
     setError(null);
     try {
-      await updateDoc(espacioRef(hostelId, planta.id, espacio.id), {
-        nombre: nombre.trim(),
-        tipo,
-        precio: asNumber(precio, espacio.data.precio ?? 0),
-        activo,
-      } satisfies Espacio);
-
-      // guardar cambios de camas inline (estado + activo)
-      const updates = Object.entries(camasDraft);
-      for (const [camaId, d] of updates) {
-        await updateDoc(camaRef(hostelId, planta.id, espacio.id, camaId), {
-          estado: d.estado,
-          activo: d.activo,
-        } as Partial<Cama> & { activo: boolean });
-      }
+      await postHostelWrite({
+        op: "updateEspacioWithCamas",
+        payload: {
+          plantaId: planta.id,
+          espacioId: espacio.id,
+          nombre: nombre.trim(),
+          tipo,
+          precio: asNumber(precio, espacio.data.precio ?? 0),
+          activo,
+          camas: Object.entries(camasDraft).map(([camaId, d]) => ({
+            camaId,
+            estado: d.estado,
+            activo: d.activo,
+          })),
+        },
+      });
       onDataSynced?.();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error guardando espacio"));
@@ -893,7 +892,10 @@ function EspacioPanel({
     setBusy(true);
     setError(null);
     try {
-      await deleteDoc(espacioRef(hostelId, planta.id, espacio.id));
+      await postHostelWrite({
+        op: "deleteEspacio",
+        payload: { plantaId: planta.id, espacioId: espacio.id },
+      });
       onDataSynced?.();
       onDeleted();
     } catch (e: unknown) {
@@ -1073,11 +1075,17 @@ function CamaPanel({
     setBusy(true);
     setError(null);
     try {
-      await updateDoc(camaRef(hostelId, planta.id, espacio.id, cama.id), {
-        nombre: nombre.trim(),
-        estado,
-        activo: visible,
-      } as Partial<Cama> & { activo: boolean });
+      await postHostelWrite({
+        op: "updateCama",
+        payload: {
+          plantaId: planta.id,
+          espacioId: espacio.id,
+          camaId: cama.id,
+          nombre: nombre.trim(),
+          estado,
+          activo: visible,
+        },
+      });
       onDataSynced?.();
     } catch (e: unknown) {
       setError(errorMessage(e, "Error guardando cama"));
@@ -1094,7 +1102,10 @@ function CamaPanel({
     setBusy(true);
     setError(null);
     try {
-      await deleteDoc(camaRef(hostelId, planta.id, espacio.id, cama.id));
+      await postHostelWrite({
+        op: "deleteCama",
+        payload: { plantaId: planta.id, espacioId: espacio.id, camaId: cama.id },
+      });
       onDataSynced?.();
       onDeleted();
     } catch (e: unknown) {
@@ -1184,10 +1195,13 @@ function AddPlantaPanel({
     setBusy(true);
     setError(null);
     try {
-      await addDoc(plantasCollection(hostelId), {
-        nombre: nombre.trim() || "Nueva planta",
-        orden: asNumber(orden, 0),
-      } satisfies Planta);
+      await postHostelWrite({
+        op: "addPlanta",
+        payload: {
+          nombre: nombre.trim() || "Nueva planta",
+          orden: asNumber(orden, 0),
+        } satisfies Planta,
+      });
       onDataSynced?.();
       onCreated();
     } catch (e: unknown) {
@@ -1249,12 +1263,16 @@ function AddEspacioPanel({
     setBusy(true);
     setError(null);
     try {
-      await addDoc(espaciosCollection(hostelId, planta.id), {
-        nombre: nombre.trim() || "Nuevo espacio",
-        tipo,
-        precio: asNumber(precio, 0),
-        activo,
-      } satisfies Espacio);
+      await postHostelWrite({
+        op: "addEspacio",
+        payload: {
+          plantaId: planta.id,
+          nombre: nombre.trim() || "Nuevo espacio",
+          tipo,
+          precio: asNumber(precio, 0),
+          activo,
+        } satisfies Espacio & { plantaId: string },
+      });
       onDataSynced?.();
       onCreated();
     } catch (e: unknown) {
@@ -1343,11 +1361,16 @@ function AddCamaPanel({
     setBusy(true);
     setError(null);
     try {
-      await addDoc(camasCollection(hostelId, planta.id, espacio.id), {
-        nombre: nombre.trim() || "Nueva cama",
-        estado,
-        activo: visible,
-      } as Cama & { activo: boolean });
+      await postHostelWrite({
+        op: "addCama",
+        payload: {
+          plantaId: planta.id,
+          espacioId: espacio.id,
+          nombre: nombre.trim() || "Nueva cama",
+          estado,
+          activo: visible,
+        },
+      });
       onDataSynced?.();
       onCreated();
     } catch (e: unknown) {
