@@ -43,13 +43,93 @@ type ApiJson = {
 let memoryCache: HostelSnapshot | null = null;
 let inflightSnapshot: Promise<HostelSnapshot> | null = null;
 
+type LocalStorageReservaData = Omit<Reserva, "checkin" | "checkout"> & {
+  checkinMillis: number;
+  checkoutMillis: number;
+};
+
+type LocalStorageBloqueoData = Omit<Bloqueo, "desde" | "hasta"> & {
+  desdeMillis: number;
+  hastaMillis: number;
+};
+
+type LocalStorageSnapshotPayload = {
+  hostelId: string;
+  hostel: Hostel | null;
+  plantas: SnapshotPlantaNode[];
+  espaciosByPlanta: Record<string, SnapshotEspacioNode[]>;
+  camasByEspacio: Record<string, SnapshotCamaNode[]>;
+  reservas: Array<{ id: string; data: LocalStorageReservaData }>;
+  bloqueos: Array<{ id: string; data: LocalStorageBloqueoData }>;
+};
+
+function readLocalStorageCache(hostelId: string): HostelSnapshot | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem("hostel_snapshot_" + hostelId);
+    if (raw == null) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    return parseSnapshotJson(parsed as ApiJson);
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalStorageCache(data: HostelSnapshot): void {
+  try {
+    if (typeof window === "undefined") return;
+    const reservas: LocalStorageSnapshotPayload["reservas"] = data.reservas.map((r) => {
+      const { checkin, checkout, ...rest } = r.data;
+      return {
+        id: r.id,
+        data: {
+          ...rest,
+          checkinMillis: checkin.toMillis(),
+          checkoutMillis: checkout.toMillis(),
+        },
+      };
+    });
+    const bloqueos: LocalStorageSnapshotPayload["bloqueos"] = data.bloqueos.map((b) => {
+      const { desde, hasta, ...rest } = b.data;
+      return {
+        id: b.id,
+        data: {
+          ...rest,
+          desdeMillis: desde.toMillis(),
+          hastaMillis: hasta.toMillis(),
+        },
+      };
+    });
+    const payload: LocalStorageSnapshotPayload = {
+      hostelId: data.hostelId,
+      hostel: data.hostel,
+      plantas: data.plantas,
+      espaciosByPlanta: data.espaciosByPlanta,
+      camasByEspacio: data.camasByEspacio,
+      reservas,
+      bloqueos,
+    };
+    window.localStorage.setItem("hostel_snapshot_" + data.hostelId, JSON.stringify(payload));
+  } catch {
+    /* localStorage ausente, cuota, modo privado, etc. */
+  }
+}
+
 export function readHostelSnapshotCache(hostelId: string | null | undefined): HostelSnapshot | null {
-  if (!hostelId || !memoryCache || memoryCache.hostelId !== hostelId) return null;
-  return memoryCache;
+  if (!hostelId) return null;
+  if (memoryCache && memoryCache.hostelId === hostelId) return memoryCache;
+  const fromStorage = readLocalStorageCache(hostelId);
+  if (fromStorage) {
+    memoryCache = fromStorage;
+    return fromStorage;
+  }
+  return null;
 }
 
 function putHostelSnapshotCache(data: HostelSnapshot) {
   memoryCache = data;
+  writeLocalStorageCache(data);
 }
 
 function parseSnapshotJson(json: ApiJson): HostelSnapshot {
