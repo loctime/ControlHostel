@@ -102,7 +102,12 @@ export function CreateHostelOnboarding({
       console.log(`${LOG} OK`, { hostelId: data.hostelId });
 
       await refreshUsuario();
-      onComplete?.();
+      if (onComplete) {
+        onComplete();
+      } else {
+        // Recargar para ver la app ya con hostelId
+        window.location.href = "/";
+      }
     } catch (e: unknown) {
       logError("crear hostel", e);
       setError(e instanceof Error ? e.message : "Error creando el hostel");
