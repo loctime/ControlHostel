@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
 import { getClientFirestore } from "./firebase";
+import type { LandingConfig } from "./landing-blocks";
 
 /** hostels/{hostelId} */
 export type Hostel = {
@@ -14,6 +15,7 @@ export type Hostel = {
   slug?: string;
   slugNombre?: string;
   descripcion?: string;
+  landingConfig?: LandingConfig;
 };
 
 /** hostels/{hostelId}/plantas/{plantaId} */

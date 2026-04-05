@@ -2,15 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { postHostelWrite } from "@/lib/hostel-config-api";
+import type { LandingConfig } from "@/lib/landing-blocks";
 
 type Props = {
   hostelId: string;
   slug: string;
   initialNombre: string;
   initialDescripcion: string;
+  landingConfig: LandingConfig | null;
 };
 
-export function EditBar({ hostelId, slug, initialNombre, initialDescripcion }: Props) {
+export function EditBar({
+  hostelId,
+  slug,
+  initialNombre,
+  initialDescripcion,
+  landingConfig,
+}: Props) {
   const [isOwner, setIsOwner] = useState(false);
   const [open, setOpen] = useState(false);
   const [nombre, setNombre] = useState(initialNombre);
