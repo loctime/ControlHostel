@@ -3,7 +3,6 @@
 import { useState, useRef } from "react"; 
 import type { LandingPaleta } from "@/lib/landing-blocks"; 
 import { extractPaletaFromImage } from "@/lib/extract-palette"; 
-import { uploadToCloudinary } from "@/lib/cloudinary"; 
  
 const GOOGLE_FONTS = [ 
   "Inter", 
@@ -61,9 +60,11 @@ export function PaletaEditor({ paleta, fuenteTitulos, fuenteContenido, onChange,
     setExtracting(true); 
     setExtractError(null); 
     try { 
-      // Subir a Cloudinary para tener URL accesible con CORS 
-      const result = await uploadToCloudinary(file, "hostels/paletas"); 
-      const extracted = await extractPaletaFromImage(result.secure_url); 
+      // Crear URL local temporal — no sube nada a ningún lado 
+      const localUrl = URL.createObjectURL(file); 
+      const extracted = await extractPaletaFromImage(localUrl); 
+      // Liberar la URL temporal 
+      URL.revokeObjectURL(localUrl); 
       setCurrent(extracted); 
       onChange(extracted, currentFuenteTitulos, currentFuenteContenido); 
     } catch (e) { 

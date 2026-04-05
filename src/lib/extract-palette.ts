@@ -55,7 +55,10 @@ export type ExtractedPaleta = {
 export function extractPaletaFromImage(imageUrl: string): Promise<ExtractedPaleta> { 
   return new Promise((resolve, reject) => { 
     const img = new Image(); 
-    img.crossOrigin = "anonymous"; 
+    // Solo setear crossOrigin para URLs externas, no para blob: URLs locales 
+    if (!imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) { 
+      img.crossOrigin = "anonymous"; 
+    } 
     img.onload = () => { 
       try { 
         const data = getImageData(img); 
@@ -76,11 +79,11 @@ export function extractPaletaFromImage(imageUrl: string): Promise<ExtractedPalet
           primario: rgbToHex(accent), 
           secundario: rgbToHex(secondary), 
         }); 
-      } catch (e) {
-        reject(e);
-      }
-    };
-    img.onerror = reject;
-    img.src = imageUrl;
-  });
+      } catch (e) { 
+        reject(e); 
+      } 
+    }; 
+    img.onerror = reject; 
+    img.src = imageUrl; 
+  }); 
 } 

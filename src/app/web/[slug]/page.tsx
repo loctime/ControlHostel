@@ -42,8 +42,13 @@ export default async function LandingPage({ params }: Props) {
   const bgColor = paleta?.fondo ?? "#0f1623"; 
   const textColor = paleta?.texto ?? "#ffffff"; 
  
+  const fuenteTitulos = landingConfig?.fuenteTitulos ?? "Playfair Display"; 
+  const fuenteContenido = landingConfig?.fuenteContenido ?? "Inter"; 
+  const googleFontsUrl = `https://fonts.googleapis.com/css2?family=${fuenteTitulos.replace(/ /g, "+")}:wght@400;600;700&family=${fuenteContenido.replace(/ /g, "+")}:wght@400;600;700&display=swap`; 
+ 
   return ( 
     <> 
+      <link rel="stylesheet" href={googleFontsUrl} /> 
       <EditBar 
         hostelId={hostelId} 
         slug={slug} 
@@ -53,7 +58,12 @@ export default async function LandingPage({ params }: Props) {
       /> 
       <main 
         className="min-h-screen" 
-        style={{ background: bgColor, color: textColor }} 
+        style={{ 
+          background: bgColor, 
+          color: textColor, 
+          "--font-titulos": `"${fuenteTitulos}", serif`, 
+          "--font-contenido": `"${fuenteContenido}", sans-serif`, 
+        } as React.CSSProperties} 
       > 
         {bloques.length === 0 ? ( 
           // Landing por defecto si no hay bloques 
