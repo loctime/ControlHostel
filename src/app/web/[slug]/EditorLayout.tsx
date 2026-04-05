@@ -5,6 +5,7 @@ import { ImageUploadButton } from "@/components/ImageUploadButton";
 import { LandingPreview } from "@/components/landing/LandingPreview";
 import type { CloudinaryUploadResult } from "@/lib/cloudinary";
 import { PaletaEditor } from "./PaletaEditor";
+import { RichTextEditor } from "@/components/RichTextEditor";
 
 type Props = {
   hostelId: string;
@@ -411,7 +412,11 @@ function BlockForm({ block, onChange }: { block: LandingBlock; onChange: (b: Lan
             <Input value={block.titulo} onChange={(e) => onChange({ ...block, titulo: e.target.value })} />
           </Field>
           <Field label="Subtítulo">
-            <Input value={block.subtitulo} onChange={(e) => onChange({ ...block, subtitulo: e.target.value })} />
+            <RichTextEditor 
+              value={block.subtitulo} 
+              onChange={(html) => onChange({ ...block, subtitulo: html })} 
+              placeholder="Subtítulo del hero..." 
+            />
           </Field>
           <Field label="Imagen de fondo">
             {block.imagenUrl ? (
@@ -484,7 +489,11 @@ function BlockForm({ block, onChange }: { block: LandingBlock; onChange: (b: Lan
             <Input value={block.titulo} onChange={(e) => onChange({ ...block, titulo: e.target.value })} />
           </Field>
           <Field label="Contenido">
-            <Textarea value={block.contenido} onChange={(e) => onChange({ ...block, contenido: e.target.value })} />
+            <RichTextEditor 
+              value={block.contenido} 
+              onChange={(html) => onChange({ ...block, contenido: html })} 
+              placeholder="Escribí el contenido..." 
+            />
           </Field>
           <SizeControls block={block} onChange={onChange} defaultHeight={200} defaultWidth={768} />
         </div>

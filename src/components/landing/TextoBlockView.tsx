@@ -11,7 +11,11 @@ export function TextoBlockView({ block }: { block: TextoBlock }) {
           <h2 className="mb-6 text-3xl font-bold" style={{ fontFamily: "var(--font-titulos)" }}>{block.titulo}</h2> 
         ) : null} 
         {block.contenido ? ( 
-          <p className="text-lg leading-relaxed opacity-80" style={{ fontFamily: "var(--font-contenido)" }}>{block.contenido}</p> 
+          <div 
+            className="text-lg leading-relaxed opacity-80 prose prose-invert max-w-none" 
+            style={{ fontFamily: "var(--font-contenido)" }} 
+            dangerouslySetInnerHTML={{ __html: block.contenido }} 
+          /> 
         ) : null} 
       </div> 
     </section> 

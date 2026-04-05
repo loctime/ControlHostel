@@ -27,7 +27,11 @@ export function HeroBlockView({ block, paleta }: { block: HeroBlock; paleta?: La
       <div className="relative z-10" style={{ color, maxWidth, width: "100%" }}> 
         <h1 className="text-5xl font-bold tracking-tight" style={{ fontFamily: "var(--font-titulos)" }}>{block.titulo || "Bienvenidos"}</h1> 
         {block.subtitulo ? ( 
-          <p className="mt-6 text-lg leading-relaxed opacity-80" style={{ fontFamily: "var(--font-contenido)" }}>{block.subtitulo}</p> 
+          <div 
+            className="mt-6 text-lg leading-relaxed opacity-80" 
+            style={{ fontFamily: "var(--font-contenido)" }} 
+            dangerouslySetInnerHTML={{ __html: block.subtitulo }} 
+          /> 
         ) : null} 
          
         <a 
