@@ -946,10 +946,12 @@ function HostelPanel({
 }) {
   const [nombre, setNombre] = useState("");
   const [direccion, setDireccion] = useState("");
+  const [slug, setSlug] = useState("");
 
   useEffect(() => {
     setNombre(hostel?.nombre ?? "");
     setDireccion(hostel?.direccion ?? "");
+    setSlug(hostel?.slug ?? "");
   }, [hostel]);
 
   async function onSave() {
@@ -961,7 +963,8 @@ function HostelPanel({
         payload: {
           nombre: nombre.trim(),
           direccion: direccion.trim(),
-        } satisfies Hostel,
+          slug: slug.trim(),
+        },
       });
       onDataSynced?.();
     } catch (e: unknown) {
@@ -987,6 +990,11 @@ function HostelPanel({
         <Field label="Dirección">
           <TextInput value={direccion} onChange={(e) => setDireccion(e.target.value)} />
         </Field>
+        <div className="lg:col-span-2">
+          <Field label="URL de tu landing" hint={`Tu landing estará en: /h/${slug || "tu-slug"}`}>
+            <TextInput value={slug} onChange={(e) => setSlug(e.target.value)} />
+          </Field>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">

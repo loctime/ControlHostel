@@ -61,10 +61,26 @@ export async function POST(request: Request) {
     switch (op) {
       case "updateHostel": {
         const x = p as Record<string, unknown>;
-        await hRef.update({
-          nombre: asNonEmptyString(x.nombre, "nombre"),
-          direccion: typeof x.direccion === "string" ? x.direccion.trim() : "",
-        });
+        const nombre = asNonEmptyString(x.nombre, "nombre");
+        const direccion = typeof x.direccion === "string" ? x.direccion.trim() : "";
+
+        let slugFinal = "";
+        if (typeof x.slug === "string" && x.slug.trim()) {
+          slugFinal = x.slug
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, "-")
+            .replace(/[^a-z0-9-]/g, "");
+
+          // Verificar unicidad
+          const existing = await db.collection("hostels").where("slug", "==", slugFinal).limit(2).get();
+          const conflict = existing.docs.find((d) => d.id !== hostelId);
+          if (conflict) {
+            return NextResponse.json({ error: "Este slug ya está en uso" }, { status: 409 });
+          }
+        }
+
+        await hRef.update({ nombre, direccion, slug: slugFinal });
         return NextResponse.json({ ok: true });
       }
 

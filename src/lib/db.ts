@@ -11,6 +11,7 @@ import { getClientFirestore } from "./firebase";
 export type Hostel = {
   nombre: string;
   direccion: string;
+  slug?: string;
 };
 
 /** hostels/{hostelId}/plantas/{plantaId} */
