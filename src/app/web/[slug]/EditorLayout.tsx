@@ -52,7 +52,7 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const [paletaOpen, setPaletaOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"bloques" | "diseno">("bloques"); 
   const [currentPaleta, setCurrentPaleta] = useState<LandingConfig["paleta"]>(initialConfig?.paleta);
   const [currentFuenteTitulos, setCurrentFuenteTitulos] = useState(initialConfig?.fuenteTitulos ?? "Playfair Display");
   const [currentFuenteContenido, setCurrentFuenteContenido] = useState(initialConfig?.fuenteContenido ?? "Inter");
@@ -146,16 +146,6 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
         <span className="rounded-lg bg-[#7c83ff]/20 px-2 py-1 text-xs font-semibold text-[#7c83ff]">
           Modo edición
         </span>
-        <button
-          onClick={() => setPaletaOpen((v) => !v)}
-          className={`rounded-xl border px-3 py-1.5 text-xs transition ${
-            paletaOpen
-              ? "border-[#7c83ff] bg-[#7c83ff]/20 text-[#7c83ff]"
-              : "border-white/10 text-gray-400 hover:bg-white/5 hover:text-white"
-          }`}
-        >
-          🎨 Paleta y tipografía
-        </button>
         <span className="text-xs text-gray-500">Los cambios se guardan al hacer click en Guardar</span>
         <div className="ml-auto flex items-center gap-3">
           {error ? <span className="text-xs text-red-400">{error}</span> : null}
@@ -203,97 +193,124 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
           </div>
         </div>
 
-        {/* Panel derecha */}
-        <div
-          className="flex w-96 shrink-0 flex-col"
-          style={{ background: "#1a1f36" }}
-        >
-          {paletaOpen ? (
-            <PaletaEditor
-              paleta={currentPaleta}
-              fuenteTitulos={currentFuenteTitulos}
-              fuenteContenido={currentFuenteContenido}
-              onChange={(p, ft, fc) => {
-                setCurrentPaleta(p);
-                setCurrentFuenteTitulos(ft);
-                setCurrentFuenteContenido(fc);
-              }}
-              onClose={() => setPaletaOpen(false)}
-            />
-          ) : (
-            <div className="flex flex-1 overflow-hidden">
-              {/* Lista de bloques */}
-              <div className="flex w-44 shrink-0 flex-col border-r border-white/10">
-                <div className="p-3">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Bloques
-                  </div>
-                  <div className="space-y-1">
-                    {sortedBloques.map((b, idx) => (
-                      <div
-                        key={b.id}
-                        className={`flex items-center gap-1 rounded-lg px-2 py-1.5 cursor-pointer transition ${
-                          selectedId === b.id
-                            ? "bg-[#7c83ff]/20 text-[#7c83ff]"
-                            : "text-gray-300 hover:bg-white/5"
-                        }`}
-                        onClick={() => setSelectedId(b.id)}
-                      >
-                        <span className="flex-1 truncate text-xs">{TIPO_LABELS[b.tipo]}</span>
-                        <div className="flex flex-col gap-0.5">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); moveBlock(b.id, "up"); }}
-                            disabled={idx === 0}
-                            className="text-[10px] leading-none text-gray-500 hover:text-white disabled:opacity-20"
-                          >▲</button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); moveBlock(b.id, "down"); }}
-                            disabled={idx === sortedBloques.length - 1}
-                            className="text-[10px] leading-none text-gray-500 hover:text-white disabled:opacity-20"
-                          >▼</button>
-                        </div>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); removeBlock(b.id); }}
-                          className="text-[10px] text-gray-600 hover:text-red-400"
-                        >✕</button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Agregar bloque */}
-                <div className="mt-auto border-t border-white/10 p-3">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Agregar
-                  </div>
-                  <div className="space-y-1">
-                    {(["hero", "galeria", "texto", "habitaciones", "contacto"] as LandingBlock["tipo"][]).map((tipo) => (
-                      <button
-                        key={tipo}
-                        onClick={() => addBlock(tipo)}
-                        className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-gray-400 transition hover:bg-white/5 hover:text-white"
-                      >
-                        {TIPO_LABELS[tipo]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Formulario del bloque seleccionado */}
-              <div className="flex-1 overflow-y-auto p-4">
-                {selectedBlock ? (
-                  <BlockForm block={selectedBlock} onChange={updateBlock} />
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center text-center text-sm text-gray-500">
-                    <span className="text-3xl mb-3">👈</span>
-                    Seleccioná un bloque para editarlo, o agregá uno nuevo.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Panel derecha */} 
+        <div 
+          className="flex w-96 shrink-0 flex-col" 
+          style={{ background: "#1a1f36" }} 
+        > 
+          {/* Pestañas */} 
+          <div className="flex shrink-0 border-b border-white/10"> 
+            <button 
+              onClick={() => setActiveTab("bloques")} 
+              className={`flex-1 py-2.5 text-xs font-semibold transition ${ 
+                activeTab === "bloques" 
+                  ? "border-b-2 border-[#7c83ff] text-[#7c83ff]" 
+                  : "text-gray-500 hover:text-gray-300" 
+              }`} 
+            > 
+              Bloques 
+            </button> 
+            <button 
+              onClick={() => setActiveTab("diseno")} 
+              className={`flex-1 py-2.5 text-xs font-semibold transition ${ 
+                activeTab === "diseno" 
+                  ? "border-b-2 border-[#7c83ff] text-[#7c83ff]" 
+                  : "text-gray-500 hover:text-gray-300" 
+              }`} 
+            > 
+              Diseño 
+            </button> 
+          </div> 
+ 
+          {/* Contenido según pestaña */} 
+          {activeTab === "diseno" ? ( 
+            <div className="flex-1 overflow-y-auto"> 
+              <PaletaEditor 
+                paleta={currentPaleta} 
+                fuenteTitulos={currentFuenteTitulos} 
+                fuenteContenido={currentFuenteContenido} 
+                onChange={(p, ft, fc) => { 
+                  setCurrentPaleta(p); 
+                  setCurrentFuenteTitulos(ft); 
+                  setCurrentFuenteContenido(fc); 
+                }} 
+                onClose={() => setActiveTab("bloques")} 
+              /> 
+            </div> 
+          ) : ( 
+            <div className="flex flex-1 overflow-hidden"> 
+              {/* Lista de bloques */} 
+              <div className="flex w-44 shrink-0 flex-col border-r border-white/10"> 
+                <div className="p-3"> 
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500"> 
+                    Bloques 
+                  </div> 
+                  <div className="space-y-1"> 
+                    {sortedBloques.map((b, idx) => ( 
+                      <div 
+                        key={b.id} 
+                        className={`flex items-center gap-1 rounded-lg px-2 py-1.5 cursor-pointer transition ${ 
+                          selectedId === b.id 
+                            ? "bg-[#7c83ff]/20 text-[#7c83ff]" 
+                            : "text-gray-300 hover:bg-white/5" 
+                        }`} 
+                        onClick={() => setSelectedId(b.id)} 
+                      > 
+                        <span className="flex-1 truncate text-xs">{TIPO_LABELS[b.tipo]}</span> 
+                        <div className="flex flex-col gap-0.5"> 
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(b.id, "up"); }} 
+                            disabled={idx === 0} 
+                            className="text-[10px] leading-none text-gray-500 hover:text-white disabled:opacity-20" 
+                          >▲</button> 
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(b.id, "down"); }} 
+                            disabled={idx === sortedBloques.length - 1} 
+                            className="text-[10px] leading-none text-gray-500 hover:text-white disabled:opacity-20" 
+                          >▼</button> 
+                        </div> 
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); removeBlock(b.id); }} 
+                          className="text-[10px] text-gray-600 hover:text-red-400" 
+                        >✕</button> 
+                      </div> 
+                    ))} 
+                  </div> 
+                </div> 
+ 
+                {/* Agregar bloque */} 
+                <div className="mt-auto border-t border-white/10 p-3"> 
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500"> 
+                    Agregar 
+                  </div> 
+                  <div className="space-y-1"> 
+                    {(["hero", "galeria", "texto", "habitaciones", "contacto"] as LandingBlock["tipo"][]).map((tipo) => ( 
+                      <button 
+                        key={tipo} 
+                        onClick={() => addBlock(tipo)} 
+                        className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-gray-400 transition hover:bg-white/5 hover:text-white" 
+                      > 
+                        {TIPO_LABELS[tipo]} 
+                      </button> 
+                    ))} 
+                  </div> 
+                </div> 
+              </div> 
+ 
+              {/* Formulario del bloque seleccionado */} 
+              <div className="flex-1 overflow-y-auto p-4"> 
+                {selectedBlock ? ( 
+                  <BlockForm block={selectedBlock} onChange={updateBlock} /> 
+                ) : ( 
+                  <div className="flex h-full flex-col items-center justify-center text-center text-sm text-gray-500"> 
+                    <span className="text-3xl mb-3">👈</span> 
+                    Seleccioná un bloque para editarlo, o agregá uno nuevo. 
+                  </div> 
+                )} 
+              </div> 
+            </div> 
+          )} 
+        </div> 
       </div>
     </div>
   );

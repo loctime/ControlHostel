@@ -128,9 +128,10 @@ export function PaletaEditor({ paleta, fuenteTitulos, fuenteContenido, onChange,
       className="flex h-full flex-col overflow-y-auto" 
       style={{ background: "#1a1f36" }} 
     > 
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3"> 
-        <span className="text-sm font-semibold text-white">🎨 Paleta y tipografía</span> 
-        <button onClick={onClose} className="text-gray-400 hover:text-white text-lg">✕</button> 
+      <div className="flex items-center border-b border-white/10 px-4 py-3"> 
+        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide"> 
+          Paleta y tipografía 
+        </span> 
       </div> 
  
       <div className="space-y-3 p-4"> 
