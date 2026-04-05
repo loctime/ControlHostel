@@ -1,5 +1,5 @@
 import { collection, doc, type CollectionReference, type DocumentReference } from "firebase/firestore";
-import { db } from "./firebase";
+import { getClientFirestore } from "./firebase";
 
 /** usuarios/{uid} — `hostelId: null` = sin hostel asignado (setup). En Firestore usá null, no "". */
 export type Usuario = {
@@ -7,10 +7,17 @@ export type Usuario = {
 };
 
 export function usuariosCollection(): CollectionReference<Usuario, Usuario> {
-  return collection(db, "usuarios") as CollectionReference<Usuario, Usuario>;
+  return collection(
+    getClientFirestore(),
+    "usuarios",
+  ) as CollectionReference<Usuario, Usuario>;
 }
 
 export function usuarioRef(uid: string): DocumentReference<Usuario, Usuario> {
-  return doc(db, "usuarios", uid) as DocumentReference<Usuario, Usuario>;
+  return doc(
+    getClientFirestore(),
+    "usuarios",
+    uid,
+  ) as DocumentReference<Usuario, Usuario>;
 }
 

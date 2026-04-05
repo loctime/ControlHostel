@@ -57,6 +57,14 @@ function ensureInitialized() {
   return { app: _app, auth: _auth!, db: _db! };
 }
 
+/**
+ * Instancia real de Firestore para `doc()`, `collection()`, etc.
+ * No uses el proxy `db` ahí: el SDK comprueba tipos y rechaza Proxies.
+ */
+export function getClientFirestore(): Firestore {
+  return ensureInitialized().db;
+}
+
 // Proxies que se inicializan de forma lazy
 export const app = new Proxy({} as FirebaseApp, {
   get(_, prop) {
@@ -70,6 +78,10 @@ export const auth = new Proxy({} as Auth, {
   },
 });
 
+/**
+ * Proxy solo para acceso a propiedades/métodos del SDK en el objeto Firestore.
+ * Para APIs modulares (`doc`, `collection`, `query`, …) usá `getClientFirestore()`.
+ */
 export const db = new Proxy({} as Firestore, {
   get(_, prop) {
     return ensureInitialized().db[prop as keyof Firestore];

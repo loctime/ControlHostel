@@ -5,7 +5,7 @@ import {
   type DocumentReference,
 } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
-import { db } from "./firebase";
+import { getClientFirestore } from "./firebase";
 
 /** hostels/{hostelId} */
 export type Hostel = {
@@ -75,18 +75,25 @@ export type Bloqueo = {
 };
 
 export function hostelsCollection(): CollectionReference<Hostel, Hostel> {
-  return collection(db, "hostels") as CollectionReference<Hostel, Hostel>;
+  return collection(getClientFirestore(), "hostels") as CollectionReference<
+    Hostel,
+    Hostel
+  >;
 }
 
 export function hostelRef(hostelId: string): DocumentReference<Hostel, Hostel> {
-  return doc(db, "hostels", hostelId) as DocumentReference<Hostel, Hostel>;
+  return doc(
+    getClientFirestore(),
+    "hostels",
+    hostelId,
+  ) as DocumentReference<Hostel, Hostel>;
 }
 
 export function plantasCollection(
   hostelId: string,
 ): CollectionReference<Planta, Planta> {
   return collection(
-    db,
+    getClientFirestore(),
     "hostels",
     hostelId,
     "plantas",
@@ -98,7 +105,7 @@ export function plantaRef(
   plantaId: string,
 ): DocumentReference<Planta, Planta> {
   return doc(
-    db,
+    getClientFirestore(),
     "hostels",
     hostelId,
     "plantas",
@@ -111,7 +118,7 @@ export function espaciosCollection(
   plantaId: string,
 ): CollectionReference<Espacio, Espacio> {
   return collection(
-    db,
+    getClientFirestore(),
     "hostels",
     hostelId,
     "plantas",
@@ -126,7 +133,7 @@ export function espacioRef(
   espacioId: string,
 ): DocumentReference<Espacio, Espacio> {
   return doc(
-    db,
+    getClientFirestore(),
     "hostels",
     hostelId,
     "plantas",
@@ -142,7 +149,7 @@ export function camasCollection(
   espacioId: string,
 ): CollectionReference<Cama, Cama> {
   return collection(
-    db,
+    getClientFirestore(),
     "hostels",
     hostelId,
     "plantas",
@@ -160,7 +167,7 @@ export function camaRef(
   camaId: string,
 ): DocumentReference<Cama, Cama> {
   return doc(
-    db,
+    getClientFirestore(),
     "hostels",
     hostelId,
     "plantas",
@@ -176,7 +183,7 @@ export function reservasCollection(
   hostelId: string,
 ): CollectionReference<Reserva, Reserva> {
   return collection(
-    db,
+    getClientFirestore(),
     "hostels",
     hostelId,
     "reservas",
@@ -188,7 +195,7 @@ export function reservaRef(
   reservaId: string,
 ): DocumentReference<Reserva, Reserva> {
   return doc(
-    db,
+    getClientFirestore(),
     "hostels",
     hostelId,
     "reservas",
@@ -200,7 +207,7 @@ export function bloqueosCollection(
   hostelId: string,
 ): CollectionReference<Bloqueo, Bloqueo> {
   return collection(
-    db,
+    getClientFirestore(),
     "hostels",
     hostelId,
     "bloqueos",
@@ -212,7 +219,7 @@ export function bloqueoRef(
   bloqueoId: string,
 ): DocumentReference<Bloqueo, Bloqueo> {
   return doc(
-    db,
+    getClientFirestore(),
     "hostels",
     hostelId,
     "bloqueos",
