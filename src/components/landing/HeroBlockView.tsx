@@ -1,9 +1,11 @@
 import type { HeroBlock, LandingPaleta } from "@/lib/landing-blocks"; 
+import { contrastColor } from "@/lib/landing-blocks"; 
  
 export function HeroBlockView({ block, paleta }: { block: HeroBlock; paleta?: LandingPaleta }) { 
   const bg = paleta?.fondo ?? "#0f1623"; 
   const color = paleta?.texto ?? "#ffffff"; 
   const accent = paleta?.primario ?? "#7c83ff"; 
+  const buttonTextColor = contrastColor(accent); 
   const minHeight = block.minHeight ?? 500; 
   const maxWidth = block.maxWidth ?? 672; 
  
@@ -31,7 +33,7 @@ export function HeroBlockView({ block, paleta }: { block: HeroBlock; paleta?: La
         <a 
           href="#contacto" 
           className="mt-10 inline-block rounded-2xl px-8 py-4 text-base font-semibold shadow-lg transition hover:opacity-90" 
-          style={{ background: accent, color: "#fff" }} 
+          style={{ background: accent, color: buttonTextColor }} 
         > 
           Reservar ahora 
         </a> 

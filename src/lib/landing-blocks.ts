@@ -57,4 +57,17 @@ export type LandingConfig = {
   bloques: LandingBlock[]; 
   paleta?: LandingPaleta; 
   fuente?: string; // nombre de Google Font, ej: "Inter" 
-}; 
+};
+
+/** 
+ * Dado un color hex de fondo, devuelve "#ffffff" o "#000000" 
+ * según cuál tenga mejor contraste (legibilidad). 
+ */
+export function contrastColor(hex: string): "#ffffff" | "#000000" {
+  if (!hex || hex.length < 7) return "#ffffff";
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return lum > 128 ? "#000000" : "#ffffff";
+} 

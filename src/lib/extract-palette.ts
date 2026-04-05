@@ -76,11 +76,11 @@ export function extractPaletaFromImage(imageUrl: string): Promise<ExtractedPalet
           primario: rgbToHex(accent), 
           secundario: rgbToHex(secondary), 
         }); 
-      } catch (e) { 
-        reject(e); 
-      } 
-    }; 
-    img.onerror = reject; 
-    img.src = imageUrl; 
-  }); 
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = reject;
+    img.src = imageUrl;
+  });
 } 
