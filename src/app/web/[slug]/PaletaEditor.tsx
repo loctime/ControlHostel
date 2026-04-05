@@ -32,6 +32,38 @@ const DEFAULT_PALETA: LandingPaleta = {
   texto: "#f0f1f5", 
 }; 
  
+function Section({ 
+  title, 
+  sectionKey, 
+  open, 
+  onToggle, 
+  children, 
+}: { 
+  title: string; 
+  sectionKey: string; 
+  open: boolean; 
+  onToggle: () => void; 
+  children: React.ReactNode; 
+}) { 
+  return ( 
+    <div className="rounded-xl border border-white/10 overflow-hidden"> 
+      <button 
+        type="button" 
+        onClick={onToggle} 
+        className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-white/5" 
+      > 
+        <span className="text-xs font-semibold text-gray-300">{title}</span> 
+        <span className="text-xs text-gray-500">{open ? "▲" : "▼"}</span> 
+      </button> 
+      {open ? ( 
+        <div className="border-t border-white/10 px-4 pb-4 pt-3"> 
+          {children} 
+        </div> 
+      ) : null} 
+    </div> 
+  ); 
+} 
+ 
 export function PaletaEditor({ paleta, fuenteTitulos, fuenteContenido, onChange, onClose }: Props) { 
   const [current, setCurrent] = useState<LandingPaleta>(paleta ?? DEFAULT_PALETA); 
   const [currentFuenteTitulos, setCurrentFuenteTitulos] = useState(fuenteTitulos ?? "Playfair Display"); 
@@ -39,6 +71,16 @@ export function PaletaEditor({ paleta, fuenteTitulos, fuenteContenido, onChange,
   const [extracting, setExtracting] = useState(false); 
   const [extractError, setExtractError] = useState<string | null>(null); 
   const fileRef = useRef<HTMLInputElement>(null); 
+ 
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ 
+    extraer: true, 
+    colores: false, 
+    tipografia: false, 
+  }); 
+ 
+  function toggleSection(key: string) { 
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] })); 
+  } 
  
   function update(key: keyof LandingPaleta, value: string) { 
     const next = { ...current, [key]: value }; 
@@ -91,12 +133,14 @@ export function PaletaEditor({ paleta, fuenteTitulos, fuenteContenido, onChange,
         <button onClick={onClose} className="text-gray-400 hover:text-white text-lg">✕</button> 
       </div> 
  
-      <div className="space-y-6 p-4"> 
-        {/* Extraer desde imagen */} 
-        <div className="rounded-xl border border-white/10 bg-white/5 p-4"> 
-          <div className="mb-2 text-xs font-semibold text-gray-300"> 
-            Extraer paleta desde una imagen 
-          </div> 
+      <div className="space-y-3 p-4"> 
+ 
+        <Section 
+          title="🖼️ Obtener colores de una imagen" 
+          sectionKey="extraer" 
+          open={openSections.extraer} 
+          onToggle={() => toggleSection("extraer")} 
+        > 
           <p className="mb-3 text-xs text-gray-500"> 
             Subí el logo o una foto del hostel y detectamos los colores automáticamente. 
           </p> 
@@ -128,62 +172,64 @@ export function PaletaEditor({ paleta, fuenteTitulos, fuenteContenido, onChange,
           {extractError ? ( 
             <p className="mt-2 text-xs text-red-400">{extractError}</p> 
           ) : null} 
-        </div> 
+        </Section> 
  
-        {/* Preview de la paleta */} 
-        <div className="flex gap-2"> 
-          {COLOR_FIELDS.map(({ key }) => ( 
-            <div 
-              key={key} 
-              className="h-8 flex-1 rounded-lg border border-white/10" 
-              style={{ background: current[key] }} 
-              title={key} 
-            /> 
-          ))} 
-        </div> 
- 
-        {/* Color pickers */} 
-        <div className="space-y-4"> 
-          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500"> 
-            Colores 
-          </div> 
-          {COLOR_FIELDS.map(({ key, label, hint }) => ( 
-            <div key={key} className="flex items-center gap-3"> 
-              <input 
-                type="color" 
-                value={current[key]} 
-                onChange={(e) => update(key, e.target.value)} 
-                className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-white/10 bg-transparent p-0.5" 
+        <Section 
+          title="🎨 Editar colores" 
+          sectionKey="colores" 
+          open={openSections.colores} 
+          onToggle={() => toggleSection("colores")} 
+        > 
+          {/* Preview de la paleta */} 
+          <div className="mb-4 flex gap-2"> 
+            {COLOR_FIELDS.map(({ key }) => ( 
+              <div 
+                key={key} 
+                className="h-8 flex-1 rounded-lg border border-white/10" 
+                style={{ background: current[key] }} 
+                title={key} 
               /> 
-              <div className="flex-1"> 
-                <div className="text-xs font-medium text-gray-300">{label}</div> 
-                <div className="text-xs text-gray-600">{hint}</div> 
+            ))} 
+          </div> 
+ 
+          {/* Color pickers */} 
+          <div className="space-y-4"> 
+            {COLOR_FIELDS.map(({ key, label, hint }) => ( 
+              <div key={key} className="flex items-center gap-3"> 
+                <input 
+                  type="color" 
+                  value={current[key]} 
+                  onChange={(e) => update(key, e.target.value)} 
+                  className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-white/10 bg-transparent p-0.5" 
+                /> 
+                <div className="flex-1"> 
+                  <div className="text-xs font-medium text-gray-300">{label}</div> 
+                  <div className="text-xs text-gray-600">{hint}</div> 
+                </div> 
+                <input 
+                  type="text" 
+                  value={current[key]} 
+                  onChange={(e) => { 
+                    if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) { 
+                      update(key, e.target.value); 
+                    } 
+                  }} 
+                  className="w-20 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs font-mono text-white outline-none focus:border-[#7c83ff]" 
+                /> 
               </div> 
-              <input 
-                type="text" 
-                value={current[key]} 
-                onChange={(e) => { 
-                  if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) { 
-                    update(key, e.target.value); 
-                  } 
-                }} 
-                className="w-20 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs font-mono text-white outline-none focus:border-[#7c83ff]" 
-              /> 
-            </div> 
-          ))} 
-        </div> 
- 
-        {/* Tipografía */} 
-        <div className="space-y-5"> 
-          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500"> 
-            Tipografía 
+            ))} 
           </div> 
+        </Section> 
  
+        <Section 
+          title="✍️ Tipografías" 
+          sectionKey="tipografia" 
+          open={openSections.tipografia} 
+          onToggle={() => toggleSection("tipografia")} 
+        > 
           {/* Fuente de títulos */} 
-          <div> 
-            <div className="mb-2 text-xs font-medium text-gray-400"> 
-              Títulos (H1, H2, H3) 
-            </div> 
+          <div className="mb-5"> 
+            <div className="mb-2 text-xs font-medium text-gray-400">Títulos (H1, H2, H3)</div> 
             <div 
               className="mb-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-2xl font-bold" 
               style={{ fontFamily: currentFuenteTitulos }} 
@@ -210,9 +256,7 @@ export function PaletaEditor({ paleta, fuenteTitulos, fuenteContenido, onChange,
  
           {/* Fuente de contenido */} 
           <div> 
-            <div className="mb-2 text-xs font-medium text-gray-400"> 
-              Contenido (párrafos, descripciones) 
-            </div> 
+            <div className="mb-2 text-xs font-medium text-gray-400">Contenido (párrafos)</div> 
             <div 
               className="mb-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-relaxed" 
               style={{ fontFamily: currentFuenteContenido }} 
@@ -236,7 +280,8 @@ export function PaletaEditor({ paleta, fuenteTitulos, fuenteContenido, onChange,
               ))} 
             </div> 
           </div> 
-        </div> 
+        </Section> 
+ 
       </div> 
     </div> 
   ); 
