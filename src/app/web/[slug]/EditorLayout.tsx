@@ -195,7 +195,7 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
 
         {/* Panel derecha */} 
         <div 
-          className="flex w-96 shrink-0 flex-col" 
+          className="flex w-[480px] shrink-0 flex-col" 
           style={{ background: "#1a1f36" }} 
         > 
           {/* Pestañas */} 
@@ -240,7 +240,7 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
           ) : ( 
             <div className="flex flex-1 overflow-hidden"> 
               {/* Lista de bloques */} 
-              <div className="flex w-44 shrink-0 flex-col border-r border-white/10"> 
+              <div className="flex w-36 shrink-0 flex-col border-r border-white/10"> 
                 <div className="p-3"> 
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500"> 
                     Bloques 
