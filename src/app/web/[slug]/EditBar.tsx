@@ -2,7 +2,7 @@
  
 import { useEffect, useState } from "react"; 
 import type { LandingConfig } from "@/lib/landing-blocks"; 
-import { LandingEditor } from "./LandingEditor"; 
+import { EditorLayout } from "./EditorLayout"; 
  
 type Props = { 
   hostelId: string; 
@@ -31,47 +31,45 @@ export function EditBar({ hostelId, slug, initialNombre, initialDescripcion, lan
  
   return ( 
     <> 
-      {/* Barra flotante */} 
-      <div 
-        style={{ 
-          position: "fixed", 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          zIndex: 40, 
-          background: "rgba(28, 32, 56, 0.97)", 
-          borderBottom: "1px solid rgba(124,131,255,0.3)", 
-          backdropFilter: "blur(8px)", 
-        }} 
-      > 
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-2"> 
-          <span className="shrink-0 rounded-lg bg-[#7c83ff]/20 px-2 py-1 text-xs font-semibold text-[#7c83ff]"> 
-            Modo edición 
-          </span> 
-          <button 
-            onClick={() => setEditorOpen(true)} 
-            className="text-sm text-gray-300 hover:text-white" 
-          > 
-            ✏️ Editar landing 
-          </button> 
-           
-          <a 
-            href={`/configuracion`} 
-            className="ml-auto text-xs text-gray-500 hover:text-gray-300" 
-          > 
-            ⚙️ Configuración 
-          </a> 
+      {!editorOpen ? ( 
+        <div 
+          style={{ 
+            position: "fixed", 
+            top: 0, 
+            left: 0, 
+            right: 0, 
+            zIndex: 40, 
+            background: "rgba(28, 32, 56, 0.97)", 
+            borderBottom: "1px solid rgba(124,131,255,0.3)", 
+            backdropFilter: "blur(8px)", 
+          }} 
+        > 
+          <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-2"> 
+            <span className="shrink-0 rounded-lg bg-[#7c83ff]/20 px-2 py-1 text-xs font-semibold text-[#7c83ff]"> 
+              Modo edición 
+            </span> 
+            <button 
+              onClick={() => setEditorOpen(true)} 
+              className="text-sm text-gray-300 hover:text-white" 
+            > 
+              ✏️ Editar landing 
+            </button> 
+             
+            <a 
+              href="/configuracion" 
+              className="ml-auto text-xs text-gray-500 hover:text-gray-300" 
+            > 
+              ⚙️ Configuración 
+            </a> 
+          </div> 
         </div> 
-      </div> 
+      ) : null} 
  
-      {/* Espaciado para que la barra no tape el contenido */} 
-      <div style={{ height: 41 }} /> 
- 
-      {/* Panel lateral */} 
       {editorOpen ? ( 
-        <LandingEditor 
+        <EditorLayout 
           hostelId={hostelId} 
           slug={slug} 
+          nombre={initialNombre} 
           initialConfig={landingConfig} 
           onClose={() => setEditorOpen(false)} 
           onSaved={() => { 
