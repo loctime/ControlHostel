@@ -1011,10 +1011,18 @@ function HostelPanel({
             Tu landing estará en: /web/{slugNombre || "nombre"}[número asignado]
           </div>
           {hostel?.slug && (
-            <div className="mt-1 text-xs text-[var(--text-tertiary)]" style={{ opacity: 0.9 }}>
-              URL actual: /web/{hostel.slug}
-            </div>
-          )}
+             <div className="mt-1 text-xs text-[var(--text-tertiary)]" style={{ opacity: 0.9 }}>
+               URL actual:{" "}
+               <a
+                 href={`/web/${hostel.slug}`}
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 className="font-medium text-[var(--bg-accent)] underline hover:opacity-80"
+               >
+                 /web/{hostel.slug} ↗
+               </a>
+             </div>
+           )}
         </div>
       </div>
 
