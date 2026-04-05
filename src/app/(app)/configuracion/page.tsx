@@ -948,14 +948,12 @@ function HostelPanel({
   const [direccion, setDireccion] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [slugNombre, setSlugNombre] = useState("");
-  const [slugNumero, setSlugNumero] = useState("");
 
   useEffect(() => {
     setNombre(hostel?.nombre ?? "");
     setDireccion(hostel?.direccion ?? "");
     setDescripcion(hostel?.descripcion ?? "");
     setSlugNombre(hostel?.slugNombre ?? "");
-    setSlugNumero(hostel?.slugNumero ?? "");
   }, [hostel]);
 
   async function onSave() {
@@ -969,7 +967,6 @@ function HostelPanel({
           direccion: direccion.trim(),
           descripcion: descripcion.trim(),
           slugNombre: slugNombre.trim(),
-          slugNumero: slugNumero.trim(),
         },
       });
       onDataSynced?.();
@@ -1003,27 +1000,21 @@ function HostelPanel({
         </div>
 
         <div className="lg:col-span-2">
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Nombre de tu página">
-              <TextInput
-                value={slugNombre}
-                onChange={(e) => setSlugNombre(e.target.value)}
-                placeholder="Ej. hostelpatagonia"
-              />
-            </Field>
-            <Field label="Número">
-              <TextInput
-                inputMode="numeric"
-                value={slugNumero}
-                onChange={(e) => setSlugNumero(e.target.value)}
-                placeholder="Ej. 24"
-              />
-            </Field>
-          </div>
+          <Field label="Nombre de tu página">
+            <TextInput
+              value={slugNombre}
+              onChange={(e) => setSlugNombre(e.target.value)}
+              placeholder="Ej. hostelpatagonia"
+            />
+          </Field>
           <div className="mt-1 text-xs text-[var(--text-tertiary)]" style={{ opacity: 0.9 }}>
-            Tu landing estará en: /web/{slugNombre || "nombre"}
-            {slugNumero || "0"}
+            Tu landing estará en: /web/{slugNombre || "nombre"}[número asignado]
           </div>
+          {hostel?.slug && (
+            <div className="mt-1 text-xs text-[var(--text-tertiary)]" style={{ opacity: 0.9 }}>
+              URL actual: /web/{hostel.slug}
+            </div>
+          )}
         </div>
       </div>
 

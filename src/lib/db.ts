@@ -13,7 +13,6 @@ export type Hostel = {
   direccion: string;
   slug?: string;
   slugNombre?: string;
-  slugNumero?: string;
   descripcion?: string;
 };
 

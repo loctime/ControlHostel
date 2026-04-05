@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   const auth = await requireHostelFromSession();
   if (!auth.ok) return auth.response;
 
-  const { db, hostelId } = auth.ctx;
+  const { db, hostelId, uid } = auth.ctx;
   const hRef = db.collection("hostels").doc(hostelId);
 
   let body: Body;
@@ -65,52 +65,70 @@ export async function POST(request: Request) {
         const direccion = typeof x.direccion === "string" ? x.direccion.trim() : "";
         const descripcion = typeof x.descripcion === "string" ? x.descripcion.trim() : "";
 
-        const slugNombreRaw = typeof x.slugNombre === "string" ? x.slugNombre.trim() : "";
-        const slugNumero = typeof x.slugNumero === "string" ? x.slugNumero.trim() : "";
+        let slugFinal = "";
 
-        if (!/^\d{1,6}$/.test(slugNumero)) {
-          return NextResponse.json(
-            { error: "El número del slug debe tener entre 1 y 6 dígitos" },
-            { status: 400 },
-          );
+        if (typeof x.slugNombre === "string" && x.slugNombre.trim()) {
+          // Normalización estricta
+          const slugNombreNorm = x.slugNombre
+            .trim()
+            .normalize("NFD")
+            .replace(/\p{M}/gu, "") // eliminar tildes
+            .toLowerCase()
+            .replace(/(.)\1+/g, "$1") // colapsar letras repetidas
+            .replace(/\s+/g, "") // eliminar espacios
+            .replace(/[^a-z0-9]/g, ""); // solo letras y números
+
+          if (!slugNombreNorm) {
+            return NextResponse.json(
+              { error: "El nombre del slug no puede estar vacío" },
+              { status: 400 },
+            );
+          }
+
+          // Obtener o crear idWeb para este usuario
+          const usuarioRef = db.doc(`usuarios/${uid}`);
+          const usuarioSnap = await usuarioRef.get();
+          let idWeb: number = usuarioSnap.get("idWeb");
+
+          if (!idWeb) {
+            // Generar nuevo idWeb con contador global atómico
+            const counterRef = db.doc("config/counters");
+            await db.runTransaction(async (tx) => {
+              const counterSnap = await tx.get(counterRef);
+              const current = counterSnap.exists
+                ? (counterSnap.get("idWebCounter") as number ?? 0)
+                : 0;
+              const next = current + 1;
+              tx.set(counterRef, { idWebCounter: next }, { merge: true });
+              tx.update(usuarioRef, { idWeb: next });
+              idWeb = next;
+            });
+          }
+
+          slugFinal = slugNombreNorm + String(idWeb);
+
+          // Verificar unicidad (por si acaso)
+          const existing = await db
+            .collection("hostels")
+            .where("slug", "==", slugFinal)
+            .limit(2)
+            .get();
+          const conflict = existing.docs.find((d) => d.id !== hostelId);
+          if (conflict) {
+            return NextResponse.json({ error: "Este slug ya está en uso" }, { status: 409 });
+          }
+
+          await hRef.update({
+            nombre,
+            direccion,
+            descripcion,
+            slug: slugFinal,
+            slugNombre: slugNombreNorm,
+          });
+        } else {
+          await hRef.update({ nombre, direccion, descripcion });
         }
 
-        const slugNombreNormalizado = slugNombreRaw
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/\p{M}/gu, "")
-          .replace(/(.)\1+/g, "$1")
-          .replace(/\s+/g, "")
-          .replace(/[^a-z0-9]/g, "");
-
-        if (!slugNombreNormalizado) {
-          return NextResponse.json(
-            { error: "El nombre del slug no puede estar vacío" },
-            { status: 400 },
-          );
-        }
-
-        const slugFinal = slugNombreNormalizado + slugNumero;
-
-        // Verificar unicidad
-        const existing = await db
-          .collection("hostels")
-          .where("slug", "==", slugFinal)
-          .limit(2)
-          .get();
-        const conflict = existing.docs.find((d) => d.id !== hostelId);
-        if (conflict) {
-          return NextResponse.json({ error: "Este slug ya está en uso" }, { status: 409 });
-        }
-
-        await hRef.update({
-          nombre,
-          direccion,
-          descripcion,
-          slug: slugFinal,
-          slugNombre: slugNombreRaw,
-          slugNumero,
-        });
         return NextResponse.json({ ok: true });
       }
 
