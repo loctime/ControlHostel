@@ -161,6 +161,8 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
                 paleta={paleta}
                 nombre={nombre}
                 hostelId={hostelId}
+                selectedId={selectedId ?? undefined}
+                onSelectBlock={(id) => setSelectedId(id)}
               />
             </div>
           </div>
@@ -277,6 +279,63 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   );
 }
 
+function SizeControls({
+  block,
+  onChange,
+  defaultHeight = 400,
+  defaultWidth = 896,
+  maxHeight = 1200,
+  maxWidth = 1600,
+}: {
+  block: LandingBlock;
+  onChange: (b: LandingBlock) => void;
+  defaultHeight?: number;
+  defaultWidth?: number;
+  maxHeight?: number;
+  maxWidth?: number;
+}) {
+  const minHeight = block.minHeight ?? defaultHeight;
+  const contentWidth = block.maxWidth ?? defaultWidth;
+
+  return (
+    <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-3">
+      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Tamaño</div>
+
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-xs text-gray-400">Altura mínima</span>
+          <span className="text-xs font-mono text-gray-300">{minHeight}px</span>
+        </div>
+        <input
+          type="range"
+          min={40}
+          max={maxHeight}
+          step={10}
+          value={minHeight}
+          onChange={(e) => onChange({ ...block, minHeight: Number(e.target.value) })}
+          className="w-full accent-[#7c83ff]"
+        />
+      </div>
+
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-xs text-gray-400">Ancho del contenido</span>
+          <span className="text-xs font-mono text-gray-300">{contentWidth}px</span>
+        </div>
+        <input
+          type="range"
+          min={300}
+          max={maxWidth}
+          step={10}
+          value={contentWidth}
+          onChange={(e) => onChange({ ...block, maxWidth: Number(e.target.value) })}
+          className="w-full accent-[#7c83ff]"
+        />
+      </div>
+    </div>
+  );
+}
+
 function BlockForm({ block, onChange }: { block: LandingBlock; onChange: (b: LandingBlock) => void }) {
   switch (block.tipo) {
     case "hero":
@@ -309,6 +368,7 @@ function BlockForm({ block, onChange }: { block: LandingBlock; onChange: (b: Lan
               }}
             />
           </Field>
+          <SizeControls block={block} onChange={onChange} defaultHeight={500} defaultWidth={672} />
         </div>
       );
 
@@ -347,6 +407,7 @@ function BlockForm({ block, onChange }: { block: LandingBlock; onChange: (b: Lan
               }}
             />
           </Field>
+          <SizeControls block={block} onChange={onChange} defaultHeight={300} defaultWidth={1024} />
         </div>
       );
 
@@ -360,6 +421,7 @@ function BlockForm({ block, onChange }: { block: LandingBlock; onChange: (b: Lan
           <Field label="Contenido">
             <Textarea value={block.contenido} onChange={(e) => onChange({ ...block, contenido: e.target.value })} />
           </Field>
+          <SizeControls block={block} onChange={onChange} defaultHeight={200} defaultWidth={768} />
         </div>
       );
 
@@ -373,11 +435,12 @@ function BlockForm({ block, onChange }: { block: LandingBlock; onChange: (b: Lan
           <p className="text-xs text-gray-500">
             Las habitaciones se toman automáticamente de los datos del hostel.
           </p>
+          <SizeControls block={block} onChange={onChange} defaultHeight={300} defaultWidth={1024} />
         </div>
       );
 
     case "contacto":
-      return (
+      return ( 
         <div className="space-y-4">
           <h3 className="font-semibold text-white">📞 Contacto</h3>
           <Field label="Título de sección">
@@ -395,6 +458,7 @@ function BlockForm({ block, onChange }: { block: LandingBlock; onChange: (b: Lan
           <Field label="Instagram" hint="Sin @">
             <Input value={block.instagram} onChange={(e) => onChange({ ...block, instagram: e.target.value })} />
           </Field>
+          <SizeControls block={block} onChange={onChange} defaultHeight={300} defaultWidth={672} />
         </div>
       );
   }

@@ -1,6 +1,8 @@
 export type BlockBase = { 
   id: string; 
   orden: number; 
+  minHeight?: number;  // altura mínima en px, default 400 
+  maxWidth?: number;   // ancho máximo del contenido en px, default 896 (max-w-4xl) 
 }; 
  
 export type HeroBlock = BlockBase & { 
