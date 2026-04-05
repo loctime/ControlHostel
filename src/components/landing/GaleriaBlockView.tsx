@@ -9,7 +9,7 @@ export function GaleriaBlockView({ block }: { block: GaleriaBlock }) {
     <section className="px-6 flex flex-col justify-center" style={{ minHeight }}> 
       <div style={{ maxWidth, margin: "0 auto", width: "100%" }}> 
         {block.titulo ? ( 
-          <h2 className="mb-8 text-center text-3xl font-bold">{block.titulo}</h2> 
+          <h2 className="mb-8 text-center text-3xl font-bold" style={{ fontFamily: "var(--font-titulos)" }}>{block.titulo}</h2> 
         ) : null} 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3"> 
           {block.imagenes.map((img) => ( 

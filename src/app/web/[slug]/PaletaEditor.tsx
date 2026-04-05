@@ -20,8 +20,9 @@ const GOOGLE_FONTS = [
  
 type Props = { 
   paleta: LandingPaleta | undefined; 
-  fuente: string | undefined; 
-  onChange: (paleta: LandingPaleta, fuente: string) => void; 
+  fuenteTitulos: string | undefined; 
+  fuenteContenido: string | undefined; 
+  onChange: (paleta: LandingPaleta, fuenteTitulos: string, fuenteContenido: string) => void; 
   onClose: () => void; 
 }; 
  
@@ -32,9 +33,10 @@ const DEFAULT_PALETA: LandingPaleta = {
   texto: "#f0f1f5", 
 }; 
  
-export function PaletaEditor({ paleta, fuente, onChange, onClose }: Props) { 
+export function PaletaEditor({ paleta, fuenteTitulos, fuenteContenido, onChange, onClose }: Props) { 
   const [current, setCurrent] = useState<LandingPaleta>(paleta ?? DEFAULT_PALETA); 
-  const [currentFuente, setCurrentFuente] = useState(fuente ?? "Inter"); 
+  const [currentFuenteTitulos, setCurrentFuenteTitulos] = useState(fuenteTitulos ?? "Playfair Display"); 
+  const [currentFuenteContenido, setCurrentFuenteContenido] = useState(fuenteContenido ?? "Inter"); 
   const [extracting, setExtracting] = useState(false); 
   const [extractError, setExtractError] = useState<string | null>(null); 
   const fileRef = useRef<HTMLInputElement>(null); 
@@ -42,12 +44,17 @@ export function PaletaEditor({ paleta, fuente, onChange, onClose }: Props) {
   function update(key: keyof LandingPaleta, value: string) { 
     const next = { ...current, [key]: value }; 
     setCurrent(next); 
-    onChange(next, currentFuente); 
+    onChange(next, currentFuenteTitulos, currentFuenteContenido); 
   } 
  
-  function updateFuente(f: string) { 
-    setCurrentFuente(f); 
-    onChange(current, f); 
+  function updateFuenteTitulos(f: string) { 
+    setCurrentFuenteTitulos(f); 
+    onChange(current, f, currentFuenteContenido); 
+  } 
+ 
+  function updateFuenteContenido(f: string) { 
+    setCurrentFuenteContenido(f); 
+    onChange(current, currentFuenteTitulos, f); 
   } 
  
   async function handleImageExtract(file: File) { 
@@ -58,7 +65,7 @@ export function PaletaEditor({ paleta, fuente, onChange, onClose }: Props) {
       const result = await uploadToCloudinary(file, "hostels/paletas"); 
       const extracted = await extractPaletaFromImage(result.secure_url); 
       setCurrent(extracted); 
-      onChange(extracted, currentFuente); 
+      onChange(extracted, currentFuenteTitulos, currentFuenteContenido); 
     } catch (e) { 
       setExtractError("No se pudo extraer la paleta. Intentá con otra imagen."); 
     } finally { 
@@ -166,25 +173,67 @@ export function PaletaEditor({ paleta, fuente, onChange, onClose }: Props) {
         </div> 
  
         {/* Tipografía */} 
-        <div className="space-y-3"> 
+        <div className="space-y-5"> 
           <div className="text-xs font-semibold uppercase tracking-wide text-gray-500"> 
             Tipografía 
           </div> 
-          <div className="grid grid-cols-2 gap-2"> 
-            {GOOGLE_FONTS.map((font) => ( 
-              <button 
-                key={font} 
-                onClick={() => updateFuente(font)} 
-                className={`rounded-xl border px-3 py-2 text-left text-sm transition ${ 
-                  currentFuente === font 
-                    ? "border-[#7c83ff] bg-[#7c83ff]/20 text-[#7c83ff]" 
-                    : "border-white/10 text-gray-300 hover:bg-white/5" 
-                }`} 
-                style={{ fontFamily: font }} 
-              > 
-                {font} 
-              </button> 
-            ))} 
+ 
+          {/* Fuente de títulos */} 
+          <div> 
+            <div className="mb-2 text-xs font-medium text-gray-400"> 
+              Títulos (H1, H2, H3) 
+            </div> 
+            <div 
+              className="mb-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-2xl font-bold" 
+              style={{ fontFamily: currentFuenteTitulos }} 
+            > 
+              Bienvenidos 
+            </div> 
+            <div className="grid grid-cols-2 gap-2"> 
+              {GOOGLE_FONTS.map((font) => ( 
+                <button 
+                  key={font} 
+                  onClick={() => updateFuenteTitulos(font)} 
+                  className={`rounded-xl border px-3 py-2 text-left text-sm transition ${ 
+                    currentFuenteTitulos === font 
+                      ? "border-[#7c83ff] bg-[#7c83ff]/20 text-[#7c83ff]" 
+                      : "border-white/10 text-gray-300 hover:bg-white/5" 
+                  }`} 
+                  style={{ fontFamily: font }} 
+                > 
+                  {font} 
+                </button> 
+              ))} 
+            </div> 
+          </div> 
+ 
+          {/* Fuente de contenido */} 
+          <div> 
+            <div className="mb-2 text-xs font-medium text-gray-400"> 
+              Contenido (párrafos, descripciones) 
+            </div> 
+            <div 
+              className="mb-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-relaxed" 
+              style={{ fontFamily: currentFuenteContenido }} 
+            > 
+              El mejor hostel de la región, con habitaciones cómodas y vista al lago. 
+            </div> 
+            <div className="grid grid-cols-2 gap-2"> 
+              {GOOGLE_FONTS.map((font) => ( 
+                <button 
+                  key={font} 
+                  onClick={() => updateFuenteContenido(font)} 
+                  className={`rounded-xl border px-3 py-2 text-left text-sm transition ${ 
+                    currentFuenteContenido === font 
+                      ? "border-[#7c83ff] bg-[#7c83ff]/20 text-[#7c83ff]" 
+                      : "border-white/10 text-gray-300 hover:bg-white/5" 
+                  }`} 
+                  style={{ fontFamily: font }} 
+                > 
+                  {font} 
+                </button> 
+              ))} 
+            </div> 
           </div> 
         </div> 
       </div> 

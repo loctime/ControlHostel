@@ -54,14 +54,15 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
 
   const [paletaOpen, setPaletaOpen] = useState(false);
   const [currentPaleta, setCurrentPaleta] = useState<LandingConfig["paleta"]>(initialConfig?.paleta);
-  const [currentFuente, setCurrentFuente] = useState(initialConfig?.fuente ?? "Inter");
+  const [currentFuenteTitulos, setCurrentFuenteTitulos] = useState(initialConfig?.fuenteTitulos ?? "Playfair Display");
+  const [currentFuenteContenido, setCurrentFuenteContenido] = useState(initialConfig?.fuenteContenido ?? "Inter");
 
   const paleta = currentPaleta;
   const selectedBlock = bloques.find((b) => b.id === selectedId) ?? null;
   const sortedBloques = bloques.slice().sort((a, b) => a.orden - b.orden);
 
   useEffect(() => {
-    if (!currentFuente) return;
+    const fonts = [currentFuenteTitulos, currentFuenteContenido].filter(Boolean);
     const id = "gfont-preview";
     let link = document.getElementById(id) as HTMLLinkElement | null;
     if (!link) {
@@ -70,8 +71,9 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
       link.rel = "stylesheet";
       document.head.appendChild(link);
     }
-    link.href = `https://fonts.googleapis.com/css2?family=${currentFuente.replace(/ /g, "+")}:wght@400;600;700&display=swap`;
-  }, [currentFuente]);
+    const family = fonts.map((f) => `family=${f.replace(/ /g, "+")}:wght@400;600;700`).join("&");
+    link.href = `https://fonts.googleapis.com/css2?${family}&display=swap`;
+  }, [currentFuenteTitulos, currentFuenteContenido]);
 
   function addBlock(tipo: LandingBlock["tipo"]) {
     const maxOrden = bloques.reduce((m, b) => Math.max(m, b.orden), -1);
@@ -117,7 +119,8 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
           landingConfig: {
             bloques: reordered,
             paleta: currentPaleta,
-            fuente: currentFuente,
+            fuenteTitulos: currentFuenteTitulos,
+            fuenteContenido: currentFuenteContenido,
           },
         },
       });
@@ -181,7 +184,13 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
             <div className="shrink-0 border-b px-4 py-1.5 text-xs text-gray-600" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
               Preview — /web/{slug}
             </div>
-            <div className="flex-1 overflow-hidden" style={{ fontFamily: currentFuente }}>
+            <div
+              className="flex-1 overflow-hidden"
+              style={{
+                "--font-titulos": `"${currentFuenteTitulos}", serif`,
+                "--font-contenido": `"${currentFuenteContenido}", sans-serif`,
+              } as React.CSSProperties}
+            >
               <LandingPreview
                 bloques={bloques}
                 paleta={paleta}
@@ -202,10 +211,12 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
           {paletaOpen ? (
             <PaletaEditor
               paleta={currentPaleta}
-              fuente={currentFuente}
-              onChange={(p, f) => {
+              fuenteTitulos={currentFuenteTitulos}
+              fuenteContenido={currentFuenteContenido}
+              onChange={(p, ft, fc) => {
                 setCurrentPaleta(p);
-                setCurrentFuente(f);
+                setCurrentFuenteTitulos(ft);
+                setCurrentFuenteContenido(fc);
               }}
               onClose={() => setPaletaOpen(false)}
             />

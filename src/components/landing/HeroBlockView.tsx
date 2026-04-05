@@ -25,15 +25,15 @@ export function HeroBlockView({ block, paleta }: { block: HeroBlock; paleta?: La
     > 
       {block.imagenUrl ? <div className="absolute inset-0 bg-black/50" /> : null} 
       <div className="relative z-10" style={{ color, maxWidth, width: "100%" }}> 
-        <h1 className="text-5xl font-bold tracking-tight">{block.titulo || "Bienvenidos"}</h1> 
+        <h1 className="text-5xl font-bold tracking-tight" style={{ fontFamily: "var(--font-titulos)" }}>{block.titulo || "Bienvenidos"}</h1> 
         {block.subtitulo ? ( 
-          <p className="mt-6 text-lg leading-relaxed opacity-80">{block.subtitulo}</p> 
+          <p className="mt-6 text-lg leading-relaxed opacity-80" style={{ fontFamily: "var(--font-contenido)" }}>{block.subtitulo}</p> 
         ) : null} 
          
         <a 
           href="#contacto" 
           className="mt-10 inline-block rounded-2xl px-8 py-4 text-base font-semibold shadow-lg transition hover:opacity-90" 
-          style={{ background: accent, color: buttonTextColor }} 
+          style={{ background: accent, color: buttonTextColor, fontFamily: "var(--font-contenido)" }} 
         > 
           Reservar ahora 
         </a> 

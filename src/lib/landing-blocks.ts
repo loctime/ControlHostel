@@ -56,7 +56,8 @@ export type LandingPaleta = {
 export type LandingConfig = { 
   bloques: LandingBlock[]; 
   paleta?: LandingPaleta; 
-  fuente?: string; // nombre de Google Font, ej: "Inter" 
+  fuenteTitulos?: string;  // Google Font para h1, h2, h3 
+  fuenteContenido?: string; // Google Font para párrafos y texto general 
 };
 
 /** 

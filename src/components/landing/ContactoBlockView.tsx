@@ -7,10 +7,10 @@ export function ContactoBlockView({ block }: { block: ContactoBlock }) {
   return ( 
     <section id="contacto" className="px-6 flex flex-col justify-center" style={{ minHeight }}> 
       <div style={{ maxWidth, margin: "0 auto", width: "100%" }}> 
-        <h2 className="mb-8 text-center text-3xl font-bold"> 
+        <h2 className="mb-8 text-center text-3xl font-bold" style={{ fontFamily: "var(--font-titulos)" }}> 
           {block.titulo || "Contacto"} 
         </h2> 
-        <div className="flex flex-col items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-8"> 
+        <div className="flex flex-col items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-8" style={{ fontFamily: "var(--font-contenido)" }}> 
           {block.email ? ( 
             <a href={`mailto:${block.email}`} className="text-sm opacity-80 hover:opacity-100"> 
               ✉️ {block.email} 
