@@ -282,6 +282,7 @@ export default function ConfiguracionPage() {
   const [error, setError] = useState<string | null>(null);
   const [treeAddForm, setTreeAddForm] = useState<TreeAddForm>(null);
   const [treeAddNombre, setTreeAddNombre] = useState("");
+  const [newPlantaColor, setNewPlantaColor] = useState<PlantaColorId | "">("");
 
   const syncData = () => void reload();
 
@@ -353,6 +354,7 @@ export default function ConfiguracionPage() {
 
   function cancelTreeAdd() {
     setTreeAddForm(null);
+    setNewPlantaColor("");
     setError(null);
   }
 
@@ -369,15 +371,18 @@ export default function ConfiguracionPage() {
     try {
       if (treeAddForm.kind === "planta") {
         const maxOrden = plantas.reduce((max, p) => Math.max(max, p.data.orden ?? 0), 0);
+        const colorTrim = newPlantaColor.trim();
         const { id } = await postHostelWrite({
           op: "addPlanta",
           payload: {
             nombre,
             orden: maxOrden + 1,
+            color: colorTrim,
           } satisfies Planta,
         });
         await reload();
         setTreeAddForm(null);
+        setNewPlantaColor("");
         if (id) {
           setExpandedPlantas((prev) => ({ ...prev, [id]: true }));
           setSelection({ kind: "planta", plantaId: id });
@@ -720,8 +725,9 @@ export default function ConfiguracionPage() {
                             type="button"
                             disabled={busy}
                             onClick={() => {
-                              setTreeAddNombre("");
+                              const count = (espaciosByPlanta[planta.id] ?? []).length;
                               setTreeAddForm({ kind: "espacio", plantaId: planta.id });
+                              setTreeAddNombre(`Habitación ${count + 1}`);
                             }}
                             className="
                               w-full rounded-xl border border-dashed border-[var(--border-secondary)]
@@ -740,20 +746,75 @@ export default function ConfiguracionPage() {
               })}
 
               {treeAddForm?.kind === "planta" ? (
-                <TreeAddNombreInline
-                  nombre={treeAddNombre}
-                  onNombreChange={setTreeAddNombre}
-                  onConfirm={confirmTreeAdd}
-                  onCancel={cancelTreeAdd}
-                  busy={busy}
-                  placeholder="Ej. Planta baja"
-                />
+                <div className="space-y-2">
+                  <TreeAddNombreInline
+                    nombre={treeAddNombre}
+                    onNombreChange={setTreeAddNombre}
+                    onConfirm={confirmTreeAdd}
+                    onCancel={cancelTreeAdd}
+                    busy={busy}
+                    placeholder="Ej. Planta baja"
+                  />
+                  <div
+                    className="
+                      rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] p-2 shadow-sm
+                    "
+                  >
+                    <Field label="Color de planta">
+                      <div className="flex flex-wrap gap-2">
+                        {PLANTA_COLORES.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setNewPlantaColor(c.id)}
+                            title={c.id}
+                            disabled={busy}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 8,
+                              background: c.bg,
+                              border:
+                                newPlantaColor === c.id
+                                  ? `3px solid ${c.text}`
+                                  : "2px solid transparent",
+                              cursor: busy ? "not-allowed" : "pointer",
+                              outline: "none",
+                              transition: "border 0.15s",
+                            }}
+                          />
+                        ))}
+                        {newPlantaColor ? (
+                          <button
+                            type="button"
+                            onClick={() => setNewPlantaColor("")}
+                            title="Sin color"
+                            disabled={busy}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 8,
+                              background: "var(--bg-page)",
+                              border: "1.5px dashed var(--border-secondary)",
+                              cursor: busy ? "not-allowed" : "pointer",
+                              fontSize: 15,
+                              color: "var(--text-tertiary)",
+                            }}
+                          >
+                            ✕
+                          </button>
+                        ) : null}
+                      </div>
+                    </Field>
+                  </div>
+                </div>
               ) : (
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => {
                     setTreeAddNombre("");
+                    setNewPlantaColor("");
                     setTreeAddForm({ kind: "planta" });
                   }}
                   className="

@@ -71,9 +71,14 @@ export async function POST(request: Request) {
       case "addPlanta": {
         const x = p as Record<string, unknown>;
         const nombreRaw = typeof x.nombre === "string" ? x.nombre.trim() : "";
+        const colorRaw = typeof x.color === "string" ? x.color.trim() : "";
+        if (colorRaw !== "" && !PLANTA_COLOR_IDS.has(colorRaw)) {
+          throw new Error("color de planta inválido");
+        }
         const ref = await hRef.collection("plantas").add({
           nombre: nombreRaw || "Nueva planta",
           orden: asNumber(x.orden, "orden"),
+          color: colorRaw,
         });
         return NextResponse.json({ ok: true, id: ref.id });
       }
@@ -124,6 +129,19 @@ export async function POST(request: Request) {
           precio: asNumber(x.precio, "precio"),
           activo: asBool(x.activo, "activo"),
         });
+        if (tipo !== "comun") {
+          await hRef
+            .collection("plantas")
+            .doc(plantaId)
+            .collection("espacios")
+            .doc(ref.id)
+            .collection("camas")
+            .add({
+              nombre: "Cama 1",
+              estado: "libre",
+              activo: true,
+            });
+        }
         return NextResponse.json({ ok: true, id: ref.id });
       }
 
