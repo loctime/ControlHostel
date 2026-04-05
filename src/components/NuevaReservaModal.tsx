@@ -149,6 +149,7 @@ export function NuevaReservaModal({
   reservas,
   defaultCheckin,
   initialBedKey,
+  initialEspacioKey,
   lockBed,
 }: {
   open: boolean;
@@ -158,6 +159,7 @@ export function NuevaReservaModal({
   reservas: ReservaNode[];
   defaultCheckin?: Date;
   initialBedKey?: CamaKey;
+  initialEspacioKey?: EspacioKey;
   lockBed?: boolean;
 }) {
   const { hostelId } = useHostel();
@@ -284,6 +286,25 @@ export function NuevaReservaModal({
       return sa.localeCompare(sb);
     });
   }, [availableBeds, espacioNameByKey]);
+
+  const bedsGroupedForStep1 = useMemo(() => {
+    if (!initialEspacioKey) return bedsGroupedByEspacio;
+    return bedsGroupedByEspacio.filter(([k]) => k === initialEspacioKey);
+  }, [bedsGroupedByEspacio, initialEspacioKey]);
+
+  const step1CamaSectionTitle = useMemo(() => {
+    if (!initialEspacioKey) return "Cama disponible";
+    const meta = espacioNameByKey.get(initialEspacioKey);
+    if (meta) return `${meta.plantaName} · ${meta.espacioName}`;
+    const parts = initialEspacioKey.split("/");
+    const espacioId = parts[1];
+    return espacioId ?? initialEspacioKey;
+  }, [espacioNameByKey, initialEspacioKey]);
+
+  const step1SinCamasDisponibles = useMemo(() => {
+    if (!initialEspacioKey) return availableBeds.length === 0;
+    return bedsGroupedForStep1.length === 0;
+  }, [availableBeds.length, bedsGroupedForStep1.length, initialEspacioKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -436,7 +457,7 @@ export function NuevaReservaModal({
           </div>
 
           <div className="block">
-            <div className="text-xs font-medium text-[var(--text-secondary)]">Cama disponible</div>
+            <div className="text-xs font-medium text-[var(--text-secondary)]">{step1CamaSectionTitle}</div>
             <div className="mt-1">
               {lockBed && bedKey ? (
                 <div
@@ -456,14 +477,14 @@ export function NuevaReservaModal({
                 <div className="rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] px-3 py-3 text-sm text-[var(--text-tertiary)]">
                   Elegí fechas válidas para ver camas disponibles.
                 </div>
-              ) : availableBeds.length === 0 ? (
+              ) : step1SinCamasDisponibles ? (
                 <div className="rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-page)] px-3 py-3 text-sm text-[var(--text-tertiary)]">
                   Sin camas disponibles para este rango.
                 </div>
               ) : (
                 <>
                   <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                    {bedsGroupedByEspacio.map(([espacioKey, beds]) => {
+                    {bedsGroupedForStep1.map(([espacioKey, beds]) => {
                       const meta = espacioNameByKey.get(espacioKey);
                       const espacioTitle =
                         meta?.espacioName?.trim() ||

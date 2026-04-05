@@ -296,6 +296,9 @@
     const [newReservaInitialBedKey, setNewReservaInitialBedKey] = useState<CamaKey | undefined>(
       undefined,
     );
+    const [newReservaInitialEspacioKey, setNewReservaInitialEspacioKey] = useState<
+      EspacioKey | undefined
+    >(undefined);
 
     const [deletingBloqueoId, setDeletingBloqueoId] = useState<string | null>(null);
 
@@ -864,6 +867,9 @@
                                   onClick={() => {
                                     setSelectedSpace({ plantaId: planta.id, espacioId: espacio.id });
                                     setNewReservaInitialBedKey(undefined);
+                                    setNewReservaInitialEspacioKey(
+                                      `${planta.id}/${espacio.id}` as EspacioKey,
+                                    );
                                     setNewReservaOpen(true);
                                   }}
                                   className="px-3 py-2"
@@ -1000,7 +1006,17 @@
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        <SecondaryButton type="button" onClick={() => setNewReservaOpen(true)}>
+                        <SecondaryButton
+                          type="button"
+                          onClick={() => {
+                            setNewReservaInitialEspacioKey(
+                              selectedSpace
+                                ? (`${selectedSpace.plantaId}/${selectedSpace.espacioId}` as EspacioKey)
+                                : undefined,
+                            );
+                            setNewReservaOpen(true);
+                          }}
+                        >
                           + Reservar
                         </SecondaryButton>
                         <SecondaryButton type="button" onClick={() => setBlockOpen(true)}>
@@ -1015,7 +1031,14 @@
                       <div className="mb-3">
                         <PrimaryButton
                           type="button"
-                          onClick={() => setNewReservaOpen(true)}
+                          onClick={() => {
+                            setNewReservaInitialEspacioKey(
+                              selectedSpace
+                                ? (`${selectedSpace.plantaId}/${selectedSpace.espacioId}` as EspacioKey)
+                                : undefined,
+                            );
+                            setNewReservaOpen(true);
+                          }}
                           className="w-full"
                         >
                           + Nueva reserva en esta habitación
@@ -1310,6 +1333,7 @@
           onClose={() => {
             setNewReservaOpen(false);
             setNewReservaInitialBedKey(undefined);
+            setNewReservaInitialEspacioKey(undefined);
           }}
           camasByEspacio={camasByEspacio as unknown as Record<ModalEspacioKey, ModalCamaNode[]>}
           espacioNameByKey={
@@ -1321,6 +1345,7 @@
           reservas={reservas as unknown as ModalReservaNode[]}
           defaultCheckin={selectedDate}
           initialBedKey={newReservaInitialBedKey}
+          initialEspacioKey={newReservaInitialEspacioKey}
         />
 
         {/* Modal: Bloquear fechas */}
