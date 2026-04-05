@@ -1,6 +1,7 @@
 "use client"; 
  
 import { useEffect, useState } from "react"; 
+import { useRouter } from "next/navigation"; 
 import type { LandingConfig } from "@/lib/landing-blocks"; 
 import { EditorLayout } from "./EditorLayout"; 
  
@@ -15,6 +16,7 @@ type Props = {
 export function EditBar({ hostelId, slug, initialNombre, initialDescripcion, landingConfig }: Props) { 
   const [isOwner, setIsOwner] = useState(false); 
   const [editorOpen, setEditorOpen] = useState(false); 
+  const router = useRouter(); 
  
   useEffect(() => { 
     fetch("/api/hostels/snapshot") 
@@ -73,8 +75,8 @@ export function EditBar({ hostelId, slug, initialNombre, initialDescripcion, lan
           initialConfig={landingConfig} 
           onClose={() => setEditorOpen(false)} 
           onSaved={() => { 
-            setEditorOpen(false); 
-            window.location.reload(); 
+            // Refresca los datos del servidor sin recargar la página 
+            router.refresh(); 
           }} 
         /> 
       ) : null} 

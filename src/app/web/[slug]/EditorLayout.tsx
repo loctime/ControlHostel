@@ -124,11 +124,10 @@ export function EditorLayout({ hostelId, slug, nombre, initialConfig, onClose, o
           },
         },
       });
-      setSaved(true);
-      setTimeout(() => {
-        setSaved(false);
-        onSaved();
-      }, 1200);
+      setSaved(true); 
+      // Notificar que se guardó — el padre llama router.refresh() sin cerrar el editor 
+      onSaved(); 
+      setTimeout(() => setSaved(false), 2500); 
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error guardando");
     } finally {
