@@ -65,23 +65,52 @@ export async function POST(request: Request) {
         const direccion = typeof x.direccion === "string" ? x.direccion.trim() : "";
         const descripcion = typeof x.descripcion === "string" ? x.descripcion.trim() : "";
 
-        let slugFinal = "";
-        if (typeof x.slug === "string" && x.slug.trim()) {
-          slugFinal = x.slug
-            .trim()
-            .toLowerCase()
-            .replace(/\s+/g, "-")
-            .replace(/[^a-z0-9-]/g, "");
+        const slugNombreRaw = typeof x.slugNombre === "string" ? x.slugNombre.trim() : "";
+        const slugNumero = typeof x.slugNumero === "string" ? x.slugNumero.trim() : "";
 
-          // Verificar unicidad
-          const existing = await db.collection("hostels").where("slug", "==", slugFinal).limit(2).get();
-          const conflict = existing.docs.find((d) => d.id !== hostelId);
-          if (conflict) {
-            return NextResponse.json({ error: "Este slug ya está en uso" }, { status: 409 });
-          }
+        if (!/^\d{1,6}$/.test(slugNumero)) {
+          return NextResponse.json(
+            { error: "El número del slug debe tener entre 1 y 6 dígitos" },
+            { status: 400 },
+          );
         }
 
-        await hRef.update({ nombre, direccion, descripcion, slug: slugFinal });
+        const slugNombreNormalizado = slugNombreRaw
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/\p{M}/gu, "")
+          .replace(/(.)\1+/g, "$1")
+          .replace(/\s+/g, "")
+          .replace(/[^a-z0-9]/g, "");
+
+        if (!slugNombreNormalizado) {
+          return NextResponse.json(
+            { error: "El nombre del slug no puede estar vacío" },
+            { status: 400 },
+          );
+        }
+
+        const slugFinal = slugNombreNormalizado + slugNumero;
+
+        // Verificar unicidad
+        const existing = await db
+          .collection("hostels")
+          .where("slug", "==", slugFinal)
+          .limit(2)
+          .get();
+        const conflict = existing.docs.find((d) => d.id !== hostelId);
+        if (conflict) {
+          return NextResponse.json({ error: "Este slug ya está en uso" }, { status: 409 });
+        }
+
+        await hRef.update({
+          nombre,
+          direccion,
+          descripcion,
+          slug: slugFinal,
+          slugNombre: slugNombreRaw,
+          slugNumero,
+        });
         return NextResponse.json({ ok: true });
       }
 

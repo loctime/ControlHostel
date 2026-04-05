@@ -946,12 +946,16 @@ function HostelPanel({
 }) {
   const [nombre, setNombre] = useState("");
   const [direccion, setDireccion] = useState("");
-  const [slug, setSlug] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [slugNombre, setSlugNombre] = useState("");
+  const [slugNumero, setSlugNumero] = useState("");
 
   useEffect(() => {
     setNombre(hostel?.nombre ?? "");
     setDireccion(hostel?.direccion ?? "");
-    setSlug(hostel?.slug ?? "");
+    setDescripcion(hostel?.descripcion ?? "");
+    setSlugNombre(hostel?.slugNombre ?? "");
+    setSlugNumero(hostel?.slugNumero ?? "");
   }, [hostel]);
 
   async function onSave() {
@@ -963,7 +967,9 @@ function HostelPanel({
         payload: {
           nombre: nombre.trim(),
           direccion: direccion.trim(),
-          slug: slug.trim(),
+          descripcion: descripcion.trim(),
+          slugNombre: slugNombre.trim(),
+          slugNumero: slugNumero.trim(),
         },
       });
       onDataSynced?.();
@@ -991,9 +997,33 @@ function HostelPanel({
           <TextInput value={direccion} onChange={(e) => setDireccion(e.target.value)} />
         </Field>
         <div className="lg:col-span-2">
-          <Field label="URL de tu landing" hint={`Tu landing estará en: /h/${slug || "tu-slug"}`}>
-            <TextInput value={slug} onChange={(e) => setSlug(e.target.value)} />
+          <Field label="Descripción">
+            <TextInput value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
           </Field>
+        </div>
+
+        <div className="lg:col-span-2">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Nombre de tu página">
+              <TextInput
+                value={slugNombre}
+                onChange={(e) => setSlugNombre(e.target.value)}
+                placeholder="Ej. hostelpatagonia"
+              />
+            </Field>
+            <Field label="Número">
+              <TextInput
+                inputMode="numeric"
+                value={slugNumero}
+                onChange={(e) => setSlugNumero(e.target.value)}
+                placeholder="Ej. 24"
+              />
+            </Field>
+          </div>
+          <div className="mt-1 text-xs text-[var(--text-tertiary)]" style={{ opacity: 0.9 }}>
+            Tu landing estará en: /web/{slugNombre || "nombre"}
+            {slugNumero || "0"}
+          </div>
         </div>
       </div>
 

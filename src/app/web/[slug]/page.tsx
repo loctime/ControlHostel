@@ -50,7 +50,7 @@ export default async function LandingPage({ params }: Props) {
             ) : null}
 
             <a
-              href={`/h/${slug}/reservar`}
+              href={`/web/${slug}/reservar`}
               className="mt-10 inline-block rounded-2xl bg-[#7c83ff] px-8 py-4 text-base font-semibold text-white shadow-lg transition hover:opacity-90"
             >
               Reservar ahora
