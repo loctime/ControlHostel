@@ -63,6 +63,7 @@ export async function POST(request: Request) {
         const x = p as Record<string, unknown>;
         const nombre = asNonEmptyString(x.nombre, "nombre");
         const direccion = typeof x.direccion === "string" ? x.direccion.trim() : "";
+        const descripcion = typeof x.descripcion === "string" ? x.descripcion.trim() : "";
 
         let slugFinal = "";
         if (typeof x.slug === "string" && x.slug.trim()) {
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
           }
         }
 
-        await hRef.update({ nombre, direccion, slug: slugFinal });
+        await hRef.update({ nombre, direccion, descripcion, slug: slugFinal });
         return NextResponse.json({ ok: true });
       }
 

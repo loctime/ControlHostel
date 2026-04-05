@@ -12,6 +12,7 @@ export type Hostel = {
   nombre: string;
   direccion: string;
   slug?: string;
+  descripcion?: string;
 };
 
 /** hostels/{hostelId}/plantas/{plantaId} */
