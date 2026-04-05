@@ -70,8 +70,11 @@ export const auth = new Proxy({} as Auth, {
   },
 });
 
-export const db = new Proxy({} as Firestore, {
-  get(_, prop) {
-    return ensureInitialized().db[prop as keyof Firestore];
-  },
-});
+/**
+ * Retorna la instancia real de Firestore (solo browser).
+ * Usar esta función en vez de un Proxy evita que falle el check
+ * `instanceof Firestore` que hace internamente el SDK de Firebase.
+ */
+export function getDb(): Firestore {
+  return ensureInitialized().db;
+}

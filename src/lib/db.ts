@@ -5,7 +5,7 @@ import {
   type DocumentReference,
 } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
-import { db } from "./firebase";
+import { getDb } from "./firebase";
 
 /** hostels/{hostelId} */
 export type Hostel = {
@@ -75,11 +75,11 @@ export type Bloqueo = {
 };
 
 export function hostelsCollection(): CollectionReference<Hostel, Hostel> {
-  return collection(db, "hostels") as CollectionReference<Hostel, Hostel>;
+  return collection(getDb(), "hostels") as CollectionReference<Hostel, Hostel>;
 }
 
 export function hostelRef(hostelId: string): DocumentReference<Hostel, Hostel> {
-  return doc(db, "hostels", hostelId) as DocumentReference<Hostel, Hostel>;
+  return doc(getDb(), "hostels", hostelId) as DocumentReference<Hostel, Hostel>;
 }
 
 export function plantasCollection(
