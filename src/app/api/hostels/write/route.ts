@@ -337,6 +337,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true });
       }
 
+      case "updateLandingConfig": {
+        const x = p as Record<string, unknown>;
+        if (!x.landingConfig || typeof x.landingConfig !== "object") {
+          return NextResponse.json({ error: "landingConfig inválido" }, { status: 400 });
+        }
+        await hRef.update({ landingConfig: x.landingConfig });
+        return NextResponse.json({ ok: true });
+      }
+
       default:
         return NextResponse.json({ error: "Operación no reconocida" }, { status: 400 });
     }
